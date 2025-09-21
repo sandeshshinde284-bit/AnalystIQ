@@ -309,7 +309,6 @@ import { useRouter } from "vue-router";
 import { useAnalysisStore } from "../stores/analysisStore";
 import FileUploadZone from "../components/Molecules/FileUploadZone.vue";
 
-// ✅ Type definitions to fix TypeScript errors
 interface UploadedFiles {
   pitchDeck: File | null;
   financialModel: File | null;
@@ -347,7 +346,6 @@ const backendStatus = ref<BackendStatus>("checking");
 const selectedCategory = ref<string>("");
 const transcriptText = ref<string>("");
 
-// ✅ TYPED FILE STRUCTURE
 const uploadedFiles = ref<UploadedFiles>({
   pitchDeck: null,
   financialModel: null,
@@ -364,7 +362,6 @@ const uploadStates = ref<UploadStates>({
   tractionData: false,
 });
 
-// ✅ TYPED VALIDATION ERRORS
 const validationErrors = ref<ValidationErrors>({
   pitchDeck: "",
   financialModel: "",
@@ -373,7 +370,6 @@ const validationErrors = ref<ValidationErrors>({
   tractionData: "",
 });
 
-// ✅ VALIDATION RULES FOR INVESTMENT DOCUMENTS
 const fileValidation: Record<
   FileType,
   {
@@ -573,7 +569,6 @@ async function handleAnalysis(): Promise<void> {
   }
 }
 
-// ✅ HELPER FUNCTIONS - PROPERLY TYPED
 function getDocumentType(key: string): string {
   const types: Record<string, string> = {
     pitchDeck: "Pitch Deck",
