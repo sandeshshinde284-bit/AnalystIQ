@@ -237,7 +237,6 @@
         </div>
       </div>
 
-      <!-- 🔥 FIXED: MetricCard with proper event handling -->
       <div class="metrics-container">
         <div
           v-for="metric in analysisData.keyMetrics"
@@ -307,7 +306,6 @@
     </div>
   </div>
 
-  <!-- 🔥 ENHANCED SOURCE MODAL -->
   <div v-if="showSourceModal" class="modal-overlay" @click="closeSourceModal">
     <div class="source-modal" @click.stop>
       <div class="modal-header">
@@ -448,7 +446,6 @@
       <!-- Debug case when no source -->
       <div v-else class="modal-content">
         <p style="color: red; padding: 20px">
-          ⚠️ DEBUG: No selectedSource data available
         </p>
       </div>
     </div>
@@ -501,7 +498,6 @@ onMounted(() => {
   }
 });
 
-// 🔥 MAIN CLICK HANDLER
 function handleMetricClick(metric: any) {
   console.log("🎯 Metric clicked:", metric.label);
   console.log("📊 Metric source:", metric.source);
@@ -565,7 +561,6 @@ function getDocumentTypeName(type: string): string {
   return names[type as keyof typeof names] || type;
 }
 
-// 🔥 METRIC CARD FUNCTIONS
 function getMetricIcon(label: string): string {
   const labelLower = label.toLowerCase();
 
@@ -818,7 +813,6 @@ $color-success: #22c55e;
 $color-warning: #f59e0b;
 $color-error: #ef4444;
 
-// 🧪 DEBUG BUTTON (remove after testing)
 .debug-btn {
   position: fixed;
   top: 20px;
@@ -1432,7 +1426,6 @@ $color-error: #ef4444;
     transform: translateY(-2px);
   }
 
-  // 🔥 SUPER PROMINENT VERSION
   &::after {
     content: "🔍 VERIFY SOURCE";
     position: absolute;
@@ -1471,7 +1464,6 @@ $color-error: #ef4444;
   }
 }
 
-// ✅ SUBTLE PULSE ANIMATION
 @keyframes subtlePulse {
   0%,
   100% {
