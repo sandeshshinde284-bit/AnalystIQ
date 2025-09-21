@@ -1,5 +1,3 @@
-<!-- C:\Google-Hack\Projects\AnalystIQ\frontend\src\views\AnalysisInProgressView.vue -->
-
 <template>
   <div class="page-wrapper">
     <div class="progress-container">
@@ -158,11 +156,11 @@ const analysisStore = useAnalysisStore();
 
 const currentStatus = ref("Initializing Investment Analysis...");
 
-// ✅ FIXED: Use local progress tracking instead of relying on store
+// Local progress tracking
 const actualProgress = ref(0);
 const currentStepIndex = ref(0);
 
-// ✅ FIXED: Create our own steps tracking
+// Analysis steps configuration
 const analysisSteps = ref([
   {
     id: "document-extraction",
@@ -192,7 +190,6 @@ const analysisSteps = ref([
   { id: "report-generation", title: "Generating deal memo", status: "pending" },
 ]);
 
-// ✅ FIXED: Proper computed properties for steps
 const actualCompletedSteps = computed(() => {
   return analysisSteps.value.filter((step) => step.status === "completed")
     .length;
@@ -202,7 +199,7 @@ const actualTotalSteps = computed(() => {
   return analysisSteps.value.length;
 });
 
-// Enhanced status messages for investment analysis
+// Status messages for different analysis phases
 const investmentStatusMessages = [
   "Extracting financial metrics and projections...",
   "Analyzing founder backgrounds and team composition...",
@@ -214,7 +211,7 @@ const investmentStatusMessages = [
   "Finalizing deal memo and analysis report...",
 ];
 
-// ✅ FIXED: Simplified documents tracking
+// Document processing simulation
 const documentsBeingProcessed = ref([
   { type: "pitchDeck", status: "processing" },
   { type: "financialModel", status: "pending" },
@@ -231,33 +228,28 @@ let stepInterval: unknown = null;
 watch(
   () => analysisStore.isLoading,
   (isLoading) => {
-    console.log(`📊 Analysis loading state changed to: ${isLoading}`);
+    console.log(`Analysis loading state changed to: ${isLoading}`);
 
     if (!isLoading && analysisStore.analysisResult) {
-      console.log("🎉 Analysis completed! Starting completion sequence...");
+      console.log("Analysis completed! Starting completion sequence...");
 
-      // Complete the progress animation first
       const completeAnimation = () => {
         actualProgress.value = 100;
         currentStatus.value = "Investment Analysis Complete!";
 
-        // Mark all steps as completed
         analysisSteps.value.forEach((step) => {
           step.status = "completed";
         });
 
-        // Then redirect after showing completion
         setTimeout(() => {
           clearAllIntervals();
           router.push("/app/analysis-results");
-        }, 2000); // Give time to see completion
+        }, 2000);
       };
 
-      // If progress is already high, complete immediately
       if (actualProgress.value > 90) {
         completeAnimation();
       } else {
-        // Otherwise, animate to completion
         const finishProgress = setInterval(() => {
           actualProgress.value += 5;
           if (actualProgress.value >= 100) {
@@ -267,7 +259,7 @@ watch(
         }, 200);
       }
     } else if (!isLoading && analysisStore.error) {
-      console.error("❌ Analysis failed:", analysisStore.error);
+      console.error("Analysis failed:", analysisStore.error);
       clearAllIntervals();
       alert("Analysis failed. Please try again.");
       router.push("/app/new-analysis");
@@ -276,28 +268,27 @@ watch(
 );
 
 onMounted(() => {
-  console.log("🎯 AnalysisInProgressView mounted");
+  console.log("AnalysisInProgressView mounted");
 
-  // ✅ IMPROVED: Check initial state properly
+  // Check if analysis is in progress
   if (
     !analysisStore.isLoading &&
     !analysisStore.analysisResult &&
     !analysisStore.error
   ) {
-    console.warn("⚠️ No analysis in progress. Redirecting...");
+    console.warn("No analysis in progress. Redirecting...");
     router.push("/app/new-analysis");
     return;
   }
 
-  // ✅ NEW: If analysis already completed before page load, show animation anyway
+  // Handle case where analysis completed before page load
   if (!analysisStore.isLoading && analysisStore.analysisResult) {
-    console.log("📋 Analysis already completed, showing progress animation...");
+    console.log("Analysis already completed, showing progress animation...");
 
-    // Start from beginning and animate to completion
     actualProgress.value = 0;
     currentStepIndex.value = 0;
 
-    // Fast-forward through steps
+    // Fast animation to catch up to completion
     const catchUpInterval = setInterval(() => {
       if (currentStepIndex.value < analysisSteps.value.length - 1) {
         analysisSteps.value[currentStepIndex.value].status = "completed";
@@ -307,7 +298,6 @@ onMounted(() => {
       } else {
         clearInterval(catchUpInterval);
 
-        // Complete final step and redirect
         setTimeout(() => {
           analysisSteps.value[currentStepIndex.value].status = "completed";
           actualProgress.value = 100;
@@ -318,20 +308,20 @@ onMounted(() => {
           }, 1500);
         }, 1000);
       }
-    }, 500); // Faster animation for catch-up
+    }, 500);
 
     return;
   }
 
-  // ✅ REGULAR PROGRESS: Analysis is still running
-  console.log("🔄 Analysis in progress, starting progress tracking...");
+  // Normal progress tracking for ongoing analysis
+  console.log("Analysis in progress, starting progress tracking...");
 
-  // Step progression
+  // Step progression timer
   stepInterval = setInterval(() => {
     if (
       currentStepIndex.value < analysisSteps.value.length - 1 &&
-      actualProgress.value < 85 && // Don't go too far if analysis isn't done
-      analysisStore.isLoading // Only continue if still loading
+      actualProgress.value < 85 &&
+      analysisStore.isLoading
     ) {
       analysisSteps.value[currentStepIndex.value].status = "completed";
       currentStepIndex.value++;
@@ -362,15 +352,13 @@ onMounted(() => {
     }
   }, 2500);
 
-  // ✅ IMPROVED: Gradual progress that stops before completion
+  // Progress bar animation
   progressInterval = setInterval(() => {
     if (actualProgress.value < 85 && analysisStore.isLoading) {
       actualProgress.value += Math.random() * 2 + 0.5;
     } else if (actualProgress.value < 90 && analysisStore.isLoading) {
-      // Slow down near the end
       actualProgress.value += Math.random() * 0.5 + 0.1;
     }
-    // Don't go to 100% until analysis actually completes
   }, 300);
 
   // Status message rotation
@@ -387,10 +375,10 @@ onMounted(() => {
     }
   }, 2500);
 
-  // Safety timeout
+  // Safety timeout for long-running analysis
   setTimeout(() => {
     if (analysisStore.isLoading && !analysisStore.analysisResult) {
-      console.log("⏰ Analysis timeout reached");
+      console.log("Analysis timeout reached");
       alert("Analysis is taking longer than expected. Please try again.");
       router.push("/app/new-analysis");
     }
@@ -566,7 +554,6 @@ $color-error: #ef4444;
   }
 }
 
-// ✅ FIXED: Enhanced doc-icon visibility
 .documents-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
