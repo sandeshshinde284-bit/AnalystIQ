@@ -138,4 +138,5 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
+# Sensitive Google Cloud credentials
 google-service-account.json
