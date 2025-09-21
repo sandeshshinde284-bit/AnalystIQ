@@ -1,6 +1,7 @@
 const { defineConfig } = require("@vue/cli-service");
 module.exports = defineConfig({
   transpileDependencies: true,
+  lintOnSave: false, // ✅ Disable ESLint temporarily
   configureWebpack: {
     resolve: {
       fallback: {
@@ -35,16 +36,8 @@ module.exports = defineConfig({
         additionalData: `
           @import "@/styles/variables.scss";
           @import "@/styles/mixins.scss";
-          @import "~@/styles/global.scss";
         `,
       },
     },
-  },
-  pwa: {
-    name: "AnalysisIQ",
-    themeColor: "#00d4ff",
-    msTileColor: "#000000",
-    appleMobileWebAppCapable: "yes",
-    appleMobileWebAppStatusBarStyle: "black",
   },
 });

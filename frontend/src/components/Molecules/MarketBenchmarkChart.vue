@@ -1,3 +1,5 @@
+<!-- C:\Google-Hack\Projects\AnalystIQ\frontend\src\components\Molecules\MarketBenchmarkChart.vue -->
+
 <template>
   <div class="benchmark-charts">
     <div class="chart-section">
@@ -40,7 +42,7 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
-import BaseChart from "@/components/Atoms/BaseChart.vue";
+import BaseChart from "../Atoms/BaseChart.vue";
 
 interface Props {
   startupName?: string;

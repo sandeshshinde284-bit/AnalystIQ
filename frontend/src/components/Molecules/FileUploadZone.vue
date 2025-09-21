@@ -1,3 +1,5 @@
+<!-- C:\Google-Hack\Projects\AnalystIQ\frontend\src\components\Molecules\FileUploadZone.vue -->
+
 <template>
   <div class="file-upload-zone">
     <!-- File Successfully Uploaded State -->

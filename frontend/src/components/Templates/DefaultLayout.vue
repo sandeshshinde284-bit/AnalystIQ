@@ -15,7 +15,7 @@
 
 <script setup lang="ts">
 // Your existing navbar component for the marketing page
-import AppNavbar from "@/components/Organisms/Navbar.vue";
+import AppNavbar from "../Organisms/Navbar.vue";
 </script>
 
 <style lang="scss" scoped>

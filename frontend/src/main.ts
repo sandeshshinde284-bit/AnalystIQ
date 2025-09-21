@@ -1,4 +1,5 @@
-// src/main.ts
+// C:\Google-Hack\Projects\AnalystIQ\frontend\src\main.ts
+
 import { createApp } from "vue";
 import { createPinia } from "pinia"; // Import Pinia
 import "remixicon/fonts/remixicon.css";

@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+
+    /* --- The KEY Fix for Module Resolution --- */
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    /* --- Other Essential Settings --- */
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "sourceMap": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "exactOptionalPropertyTypes": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"],
+  "ts-node": {
+    "esm": true
+  }
+}

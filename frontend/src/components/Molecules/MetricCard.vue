@@ -1,163 +1,179 @@
+<!-- C:\Google-Hack\Projects\AnalystIQ\frontend\src\components\Molecules\MetricCard.vue -->
+
 <template>
-  <div
-    class="metric-card"
-    :class="{ 'cross-validated': isValidated, animated: animate }"
-  >
-    <!-- Header with Mini Chart -->
+  <div class="metric-card glassmorphism">
     <div class="metric-header">
+      <div class="metric-icon" :style="{ backgroundColor: iconBg }">
+        <i :class="icon" :style="{ color: iconColor }"></i>
+      </div>
       <div class="metric-info">
-        <div class="metric-label">{{ label }}</div>
-        <div class="metric-badges">
-          <div v-if="isValidated" class="validation-badge">
-            <i class="ri-links-line"></i>
-            Cross-Verified
-          </div>
-          <div class="confidence-badge" :class="confidenceClass">
-            {{ confidence }} Confidence
-          </div>
+        <h4 class="metric-label">{{ label }}</h4>
+        <div class="metric-value">
+          {{ formattedValue }}
+          <span v-if="unit" class="metric-unit">{{ unit }}</span>
         </div>
       </div>
-      <div class="metric-chart">
-        <MiniChart
-          :type="chartType"
-          :value="chartValue"
-          :max="chartMax"
-          :data="trendData"
-          :color="chartColor"
-        />
-      </div>
     </div>
 
-    <!-- Main Value -->
-    <div class="metric-value-section">
-      <div class="metric-value">{{ displayValue }}</div>
-      <div v-if="change" class="metric-change" :class="changeClass">
-        <i :class="changeIcon"></i>
-        {{ change }}
-      </div>
+    <!-- ✅ FIXED: Added proper type guards and defaults -->
+    <div
+      v-if="showChart && safeChartType && safeChartValue !== undefined"
+      class="metric-chart"
+    >
+      <MiniChart
+        :type="safeChartType"
+        :value="safeChartValue"
+        :max="chartMax || 100"
+        :data="trendData || []"
+        :color="chartColor || iconColor"
+      />
     </div>
 
-    <!-- Source Verification -->
-    <div class="metric-footer">
-      <div class="source-info">
-        <i class="ri-file-text-line"></i>
-        <span>{{ sourceLocation }}</span>
-      </div>
-      <button
-        class="verify-btn"
-        @click="$emit('verify', sourceData)"
-        :title="`Verify source (${confidence} confidence)`"
-      >
-        <i class="ri-search-eye-line"></i>
-        <span>Verify</span>
-      </button>
+    <div v-if="trend" class="metric-trend" :class="trendClass">
+      <i :class="trendIcon"></i>
+      <span>{{ trendText }}</span>
     </div>
 
-    <!-- Glow Effect -->
-    <div class="glow-effect" :style="{ '--glow-color': chartColor }"></div>
+    <div v-if="source" class="metric-source">
+      <i class="ri-information-line"></i>
+      <span>{{ source.type }}: {{ source.location }}</span>
+      <div class="confidence-badge" :class="confidenceClass">
+        {{ source.confidence }}
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
-import MiniChart from "@/components/Atoms/MiniChart.vue";
+import MiniChart from "../Atoms/MiniChart.vue";
+
+// ✅ PROPER TYPE DEFINITIONS
+interface Source {
+  type: string;
+  location: string;
+  confidence: string;
+}
+
+interface Trend {
+  direction: "up" | "down" | "stable";
+  value: number;
+  period: string;
+}
 
 interface Props {
   label: string;
   value: string | number;
-  sourceData: any;
-  confidence: string;
-  sourceLocation: string;
-  isValidated?: boolean;
+  unit?: string;
+  icon: string;
+  iconColor?: string;
+  iconBg?: string;
+  trend?: Trend;
+  source?: Source;
   chartType?: "progress" | "trend" | "gauge";
   chartValue?: number;
   chartMax?: number;
   trendData?: number[];
-  change?: string;
-  animate?: boolean;
+  chartColor?: string;
+  showChart?: boolean;
 }
 
+// ✅ DEFINE PROPS WITH PROPER TYPES
 const props = withDefaults(defineProps<Props>(), {
-  isValidated: false,
-  chartType: "progress",
-  chartValue: 75,
+  unit: "",
+  iconColor: "#00d4ff",
+  iconBg: "rgba(0, 212, 255, 0.1)",
   chartMax: 100,
-  animate: true,
+  chartColor: "#00d4ff",
+  showChart: false,
+  trendData: () => [],
 });
 
-defineEmits<{
-  verify: [sourceData: any];
-}>();
+// ✅ SAFE COMPUTED VALUES WITH TYPE GUARDS
+const safeChartType = computed((): "progress" | "trend" | "gauge" | null => {
+  if (!props.chartType) return null;
+  if (["progress", "trend", "gauge"].includes(props.chartType)) {
+    return props.chartType;
+  }
+  return null;
+});
 
-const displayValue = computed(() => {
+const safeChartValue = computed((): number | undefined => {
+  if (typeof props.chartValue === "number" && !isNaN(props.chartValue)) {
+    return props.chartValue;
+  }
+  return undefined;
+});
+
+const formattedValue = computed((): string => {
   if (typeof props.value === "number") {
+    // Format large numbers
+    if (props.value >= 1000000) {
+      return (props.value / 1000000).toFixed(1) + "M";
+    } else if (props.value >= 1000) {
+      return (props.value / 1000).toFixed(1) + "K";
+    }
     return props.value.toLocaleString();
   }
-  return props.value;
+  return String(props.value);
 });
 
-const confidenceClass = computed(() => {
-  switch (props.confidence.toLowerCase()) {
-    case "high":
-      return "high";
-    case "medium":
-      return "medium";
-    case "low":
-      return "low";
+const trendClass = computed((): string => {
+  if (!props.trend) return "";
+  return `trend-${props.trend.direction}`;
+});
+
+const trendIcon = computed((): string => {
+  if (!props.trend) return "";
+  switch (props.trend.direction) {
+    case "up":
+      return "ri-arrow-up-line";
+    case "down":
+      return "ri-arrow-down-line";
+    case "stable":
+      return "ri-subtract-line";
     default:
-      return "medium";
+      return "ri-subtract-line";
   }
 });
 
-const chartColor = computed(() => {
-  if (props.isValidated) return "#22c55e";
-  switch (props.confidence.toLowerCase()) {
-    case "high":
-      return "#00d4ff";
-    case "medium":
-      return "#f59e0b";
-    case "low":
-      return "#ef4444";
-    default:
-      return "#00d4ff";
-  }
+const trendText = computed((): string => {
+  if (!props.trend) return "";
+  const sign =
+    props.trend.direction === "up"
+      ? "+"
+      : props.trend.direction === "down"
+        ? "-"
+        : "";
+  return `${sign}${Math.abs(props.trend.value)}% ${props.trend.period}`;
 });
 
-const changeClass = computed(() => {
-  if (!props.change) return "";
-  return props.change.includes("+") || props.change.includes("↗")
-    ? "positive"
-    : "negative";
-});
-
-const changeIcon = computed(() => {
-  if (!props.change) return "";
-  return changeClass.value === "positive"
-    ? "ri-arrow-up-line"
-    : "ri-arrow-down-line";
+const confidenceClass = computed((): string => {
+  if (!props.source) return "";
+  const confidence = props.source.confidence.toLowerCase();
+  if (confidence.includes("high")) return "confidence-high";
+  if (confidence.includes("medium")) return "confidence-medium";
+  return "confidence-low";
 });
 </script>
 
 <style lang="scss" scoped>
 $color-accent: #00d4ff;
-$color-success: #22c55e;
-$color-warning: #f59e0b;
-$color-error: #ef4444;
 
 .metric-card {
-  animation-delay: var(--animation-delay);
-  background: linear-gradient(
-    145deg,
-    rgba(28, 36, 54, 0.4),
-    rgba(20, 26, 40, 0.5)
-  );
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
   padding: 24px;
+  transition: all 0.3s ease;
   position: relative;
-  border: 1px solid rgba($color-accent, 0.2);
-  box-shadow: 0 0 20px rgba($color-accent, 0.05);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
+
+  &:hover {
+    border-color: rgba($color-accent, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  }
 
   &::before {
     content: "";
@@ -165,226 +181,166 @@ $color-error: #ef4444;
     top: 0;
     left: 0;
     right: 0;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      rgba($color-accent, 0),
-      rgba($color-accent, 0.5),
-      rgba($color-accent, 0)
-    );
-    opacity: 0.7;
-  }
-
-  &.animated {
-    animation: cardSlideIn 0.6s ease-out;
-  }
-
-  &:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 15px 35px rgba($color-accent, 0.25),
-      0 0 30px rgba($color-accent, 0.1);
-    border-color: rgba($color-accent, 0.6);
-
-    .glow-effect {
-      opacity: 1;
-    }
-  }
-
-  &.cross-validated {
-    border-color: rgba($color-success, 0.4);
-
-    &:hover {
-      box-shadow: 0 15px 35px rgba($color-success, 0.25),
-        0 0 30px rgba($color-success, 0.1);
-      border-color: rgba($color-success, 0.6);
-    }
-  }
-}
-
-@keyframes cardSlideIn {
-  from {
+    height: 3px;
+    background: linear-gradient(90deg, $color-accent, #00a2ff);
     opacity: 0;
-    transform: translateY(30px);
+    transition: opacity 0.3s ease;
   }
-  to {
+
+  &:hover::before {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
 .metric-header {
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 20px;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.metric-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  i {
+    font-size: 24px;
+  }
 }
 
 .metric-info {
   flex: 1;
+  min-width: 0;
 }
 
 .metric-label {
-  font-family: "AlibabaSans-Medium", sans-serif;
   font-size: 14px;
-  color: #8b93a7;
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.metric-badges {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.validation-badge,
-.confidence-badge {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  border-radius: 8px;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  width: fit-content;
-}
-
-.validation-badge {
-  background: rgba($color-success, 0.1);
-  color: $color-success;
-  border: 1px solid rgba($color-success, 0.3);
-}
-
-.confidence-badge {
-  &.high {
-    background: rgba($color-accent, 0.1);
-    color: $color-accent;
-    border: 1px solid rgba($color-accent, 0.3);
-  }
-
-  &.medium {
-    background: rgba($color-warning, 0.1);
-    color: $color-warning;
-    border: 1px solid rgba($color-warning, 0.3);
-  }
-
-  &.low {
-    background: rgba($color-error, 0.1);
-    color: $color-error;
-    border: 1px solid rgba($color-error, 0.3);
-  }
-}
-
-.metric-chart {
-  opacity: 0.8;
-  transition: all 0.3s ease;
-
-  .metric-card:hover & {
-    opacity: 1;
-    transform: scale(1.05);
-  }
-}
-
-.metric-value-section {
-  margin-bottom: 20px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
 }
 
 .metric-value {
-  font-family: "AlibabaSans-Bold", sans-serif;
-  font-size: 32px;
+  font-size: 28px;
+  font-weight: 700;
   color: #ffffff;
-  margin-bottom: 4px;
-  animation: valueCountUp 1.5s ease-out;
-}
-
-@keyframes valueCountUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.metric-change {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 4px;
-  font-size: 12px;
-  font-weight: 600;
-
-  &.positive {
-    color: $color-success;
-  }
-
-  &.negative {
-    color: $color-error;
-  }
+  line-height: 1.1;
+  word-break: break-all;
 }
 
-.metric-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.metric-unit {
+  font-size: 16px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
 }
 
-.source-info {
+.metric-chart {
+  margin: 16px 0;
+  height: 60px;
+}
+
+.metric-trend {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 500;
+
+  i {
+    font-size: 16px;
+  }
+
+  &.trend-up {
+    color: #22c55e;
+  }
+
+  &.trend-down {
+    color: #ef4444;
+  }
+
+  &.trend-stable {
+    color: #f59e0b;
+  }
+}
+
+.metric-source {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
   color: rgba(255, 255, 255, 0.5);
 
   i {
+    font-size: 14px;
     color: $color-accent;
-    font-size: 12px;
+  }
+
+  span {
+    flex: 1;
   }
 }
 
-.verify-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  background: rgba($color-accent, 0.1);
-  color: $color-accent;
-  border: 1px solid rgba($color-accent, 0.2);
-  border-radius: 8px;
+.confidence-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
-  cursor: pointer;
-  transition: all 0.3s ease;
+  letter-spacing: 0.5px;
 
-  &:hover {
-    background: rgba($color-accent, 0.2);
-    border-color: rgba($color-accent, 0.4);
-    box-shadow: 0 0 10px rgba($color-accent, 0.3);
-    transform: translateY(-1px);
+  &.confidence-high {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+  }
+
+  &.confidence-medium {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  &.confidence-low {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
   }
 }
 
-.glow-effect {
-  position: absolute;
-  top: -2px;
-  left: -2px;
-  right: -2px;
-  bottom: -2px;
-  background: linear-gradient(
-    45deg,
-    var(--glow-color),
-    transparent,
-    var(--glow-color)
-  );
-  border-radius: 18px;
-  opacity: 0;
-  z-index: -1;
-  filter: blur(8px);
-  transition: opacity 0.3s ease;
+// Responsive design
+@media (max-width: 768px) {
+  .metric-card {
+    padding: 20px;
+  }
+
+  .metric-value {
+    font-size: 24px;
+  }
+
+  .metric-header {
+    gap: 12px;
+  }
+
+  .metric-icon {
+    width: 40px;
+    height: 40px;
+
+    i {
+      font-size: 20px;
+    }
+  }
 }
 </style>

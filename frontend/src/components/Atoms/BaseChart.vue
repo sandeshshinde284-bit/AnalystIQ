@@ -1,3 +1,5 @@
+<!--  C:\Google-Hack\Projects\AnalystIQ\frontend\src\components\Atoms\BaseChart.vue -->
+
 <template>
   <div class="chart-container">
     <canvas ref="chartCanvas"></canvas>

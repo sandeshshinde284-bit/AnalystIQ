@@ -51,7 +51,7 @@
 
 <script setup lang="ts">
 import { useRouter } from "vue-router";
-import FeatureCard from "@/components/Molecules/FeatureCard.vue";
+import FeatureCard from "../components/Molecules/FeatureCard.vue";
 const features = [
   {
     icon: "ri-file-text-line",
@@ -80,7 +80,7 @@ const features = [
 ];
 const router = useRouter();
 function goToNewAnalysis() {
-  router.push("/new-analysis");
+  router.push("/app/new-analysis");
 }
 </script>
 
@@ -155,7 +155,9 @@ function goToNewAnalysis() {
   font-size: 18px;
   font-weight: bold;
   cursor: pointer;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease;
   box-shadow: 0 4px 20px rgba($color-accent, 0.3);
   &:hover {
     transform: translateY(-2px);
@@ -188,10 +190,8 @@ function goToNewAnalysis() {
   left: 0;
   right: 0;
   bottom: 0;
-  background-image: linear-gradient(
-      rgba(255, 255, 255, 0.05) 1px,
-      transparent 1px
-    ),
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
   background-size: 40px 40px;
 }

@@ -1,24 +1,41 @@
-<!-- File: src/App.vue -->
+<!-- C:\Google-Hack\Projects\AnalystIQ\frontend\src\App.vue -->
+
 <template>
-  <!-- 
-    With our new layout system, this root App.vue component's only job 
-    is to provide a space for the router to render the correct layout. 
-    We remove the direct navbar component from here.
-  -->
-  <router-view />
+  <div id="app">
+    <!-- Add navbar to all pages -->
+    <Navbar v-if="showNavbar" />
+    <AppHeader v-if="showAppHeader" />
+
+    <!-- Router content -->
+    <router-view />
+  </div>
 </template>
 
-<script lang="ts">
-import { defineComponent } from "vue";
+<script setup lang="ts">
+import { computed } from "vue";
+import { useRoute } from "vue-router";
+import Navbar from "./components/Organisms/Navbar.vue";
+import AppHeader from "./components/Organisms/AppHeader.vue";
 
-// We no longer need to import or register AppNavbar here.
-export default defineComponent({
-  name: "App",
+const route = useRoute();
+
+// Show landing navbar on home and public pages
+const showNavbar = computed(() => {
+  const publicPages = ["/", "/about", "/login"];
+  return publicPages.includes(route.path);
+});
+
+// Show app header on application pages
+const showAppHeader = computed(() => {
+  return route.path.startsWith("/app");
 });
 </script>
 
 <style lang="scss">
-// It's great that your global styles are in a separate file.
-// We can leave this section as is, or import them here if needed.
 @import "@/styles/global.scss";
+
+#app {
+  min-height: 100vh;
+  background-color: $color-background;
+}
 </style>

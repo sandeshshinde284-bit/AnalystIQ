@@ -1,3 +1,5 @@
+// C:\Google-Hack\Projects\AnalystIQ\frontend\.eslintrc.js
+
 module.exports = {
   root: true,
   env: {

@@ -1,3 +1,5 @@
+<!-- C:\Google-Hack\Projects\AnalystIQ\frontend\src\views\NewAnalysisView.vue -->
+
 <template>
   <div class="page-wrapper">
     <div class="container">
@@ -6,6 +8,27 @@
         Upload startup documents for comprehensive investment analysis and due
         diligence
       </p>
+
+      <!-- Backend Status Indicator -->
+      <div
+        v-if="backendStatus !== 'checking'"
+        class="backend-status"
+        :class="backendStatus"
+      >
+        <i
+          :class="
+            backendStatus === 'connected'
+              ? 'ri-check-line'
+              : 'ri-error-warning-line'
+          "
+        ></i>
+        <span v-if="backendStatus === 'connected'"
+          >🚀 AI Analysis Engine Ready</span
+        >
+        <span v-else
+          >⚠️ Backend Disconnected - Please start backend server</span
+        >
+      </div>
 
       <form @submit.prevent="handleAnalysis">
         <!-- Enhanced Category Dropdown -->
@@ -51,7 +74,9 @@
               :is-uploading="uploadStates.pitchDeck"
               accept=".pdf,.ppt,.pptx"
               placeholder="Drag and drop startup pitch deck here"
-              @file-selected="(file) => handleFileUpload('pitchDeck', file)"
+              @file-selected="
+                (file: File) => handleFileUpload('pitchDeck', file)
+              "
               @change-file="() => changeFile('pitchDeck')"
               :max-size="30"
               file-type="Pitch Deck"
@@ -91,7 +116,7 @@
                 accept=".xlsx,.xls,.csv,.pdf"
                 placeholder="Financial models & projections"
                 @file-selected="
-                  (file) => handleFileUpload('financialModel', file)
+                  (file: File) => handleFileUpload('financialModel', file)
                 "
                 @change-file="() => changeFile('financialModel')"
                 :max-size="10"
@@ -119,7 +144,7 @@
                 accept=".pdf,.doc,.docx"
                 placeholder="Founder CVs & team backgrounds"
                 @file-selected="
-                  (file) => handleFileUpload('founderProfiles', file)
+                  (file: File) => handleFileUpload('founderProfiles', file)
                 "
                 @change-file="() => changeFile('founderProfiles')"
                 :max-size="8"
@@ -147,7 +172,7 @@
                 accept=".pdf,.doc,.docx,.xlsx"
                 placeholder="Market analysis & competitive landscape"
                 @file-selected="
-                  (file) => handleFileUpload('marketResearch', file)
+                  (file: File) => handleFileUpload('marketResearch', file)
                 "
                 @change-file="() => changeFile('marketResearch')"
                 :max-size="10"
@@ -175,7 +200,7 @@
                 accept=".pdf,.xlsx,.csv,.png,.jpg"
                 placeholder="Growth metrics, user data, revenue"
                 @file-selected="
-                  (file) => handleFileUpload('tractionData', file)
+                  (file: File) => handleFileUpload('tractionData', file)
                 "
                 @change-file="() => changeFile('tractionData')"
                 :max-size="5"
@@ -236,9 +261,11 @@
           <div class="summary-grid">
             <template v-for="(file, key) in uploadedFiles" :key="key">
               <div v-if="file" class="summary-item">
-                <i :class="getFileIcon(key)"></i>
+                <i :class="getFileIcon(key as string)"></i>
                 <div class="summary-info">
-                  <span class="doc-type">{{ getDocumentType(key) }}</span>
+                  <span class="doc-type">{{
+                    getDocumentType(key as string)
+                  }}</span>
                   <span class="file-name">{{ file.name }}</span>
                   <span class="file-size">{{ formatFileSize(file.size) }}</span>
                 </div>
@@ -261,9 +288,9 @@
           <div class="btn-content">
             <i class="ri-brain-line"></i>
             <div class="btn-text">
-              <span v-if="!isFormReady" class="main-text"
-                >Upload Startup Documents to Begin</span
-              >
+              <span v-if="!isFormReady" class="main-text">{{
+                getButtonText()
+              }}</span>
               <span v-else class="main-text">Generate Investment Analysis</span>
               <span v-if="isFormReady" class="sub-text"
                 >AI-powered startup evaluation & due diligence</span
@@ -277,28 +304,59 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { useAnalysisStore } from "@/store/analysisStore";
-import FileUploadZone from "@/components/Molecules/FileUploadZone.vue";
+import { useAnalysisStore } from "../stores/analysisStore";
+import FileUploadZone from "../components/Molecules/FileUploadZone.vue";
+
+// ✅ Type definitions to fix TypeScript errors
+interface UploadedFiles {
+  pitchDeck: File | null;
+  financialModel: File | null;
+  founderProfiles: File | null;
+  marketResearch: File | null;
+  tractionData: File | null;
+}
+
+interface UploadStates {
+  pitchDeck: boolean;
+  financialModel: boolean;
+  founderProfiles: boolean;
+  marketResearch: boolean;
+  tractionData: boolean;
+}
+
+interface ValidationErrors {
+  pitchDeck: string;
+  financialModel: string;
+  founderProfiles: string;
+  marketResearch: string;
+  tractionData: string;
+}
+
+type FileType = keyof UploadedFiles;
+type BackendStatus = "checking" | "connected" | "disconnected";
 
 const router = useRouter();
 const analysisStore = useAnalysisStore();
 
-// Form state
-const selectedCategory = ref("");
-const transcriptText = ref("");
+// Backend connection status
+const backendStatus = ref<BackendStatus>("checking");
 
-// ✅ NEW PROFESSIONAL FILE STRUCTURE
-const uploadedFiles = ref({
-  pitchDeck: null as File | null,
-  financialModel: null as File | null,
-  founderProfiles: null as File | null,
-  marketResearch: null as File | null,
-  tractionData: null as File | null,
+// Form state
+const selectedCategory = ref<string>("");
+const transcriptText = ref<string>("");
+
+// ✅ TYPED FILE STRUCTURE
+const uploadedFiles = ref<UploadedFiles>({
+  pitchDeck: null,
+  financialModel: null,
+  founderProfiles: null,
+  marketResearch: null,
+  tractionData: null,
 });
 
-const uploadStates = ref({
+const uploadStates = ref<UploadStates>({
   pitchDeck: false,
   financialModel: false,
   founderProfiles: false,
@@ -306,8 +364,8 @@ const uploadStates = ref({
   tractionData: false,
 });
 
-// ✅ VALIDATION ERRORS FOR NEW STRUCTURE
-const validationErrors = ref({
+// ✅ TYPED VALIDATION ERRORS
+const validationErrors = ref<ValidationErrors>({
   pitchDeck: "",
   financialModel: "",
   founderProfiles: "",
@@ -316,7 +374,14 @@ const validationErrors = ref({
 });
 
 // ✅ VALIDATION RULES FOR INVESTMENT DOCUMENTS
-const fileValidation = {
+const fileValidation: Record<
+  FileType,
+  {
+    types: string[];
+    maxSize: number;
+    extensions: string[];
+  }
+> = {
   pitchDeck: {
     types: [
       "application/pdf",
@@ -371,33 +436,70 @@ const fileValidation = {
 };
 
 // Computed properties
-const isFormReady = computed(() => {
+const isFormReady = computed((): boolean => {
   return (
-    uploadedFiles.value.pitchDeck &&
-    selectedCategory.value &&
-    !Object.values(uploadStates.value).some((state) => state)
+    uploadedFiles.value.pitchDeck !== null &&
+    selectedCategory.value !== "" &&
+    backendStatus.value === "connected" &&
+    !Object.values(uploadStates.value).some((state: boolean) => state)
   );
 });
 
-const hasAnyFiles = computed(() => {
-  return Object.values(uploadedFiles.value).some((file) => file !== null);
+const hasAnyFiles = computed((): boolean => {
+  return Object.values(uploadedFiles.value).some(
+    (file: File | null) => file !== null
+  );
 });
 
-const hasAnySupportingDocs = computed(() => {
+const hasAnySupportingDocs = computed((): boolean => {
   const { pitchDeck, ...supportingDocs } = uploadedFiles.value;
-  return Object.values(supportingDocs).some((file) => file !== null);
+  return Object.values(supportingDocs).some(
+    (file: File | null) => file !== null
+  );
 });
 
-const uploadedFileCount = computed(() => {
-  return Object.values(uploadedFiles.value).filter((file) => file !== null)
-    .length;
+const uploadedFileCount = computed((): number => {
+  return Object.values(uploadedFiles.value).filter(
+    (file: File | null) => file !== null
+  ).length;
 });
+
+// Backend status check on mount
+onMounted(async (): Promise<void> => {
+  // Check backend connection
+  try {
+    const isConnected: boolean = await analysisStore.checkBackendConnection();
+    backendStatus.value = isConnected ? "connected" : "disconnected";
+
+    if (!isConnected) {
+      console.warn(
+        "⚠️ Backend server not reachable. Please ensure backend is running on http://localhost:5000"
+      );
+    } else {
+      console.log("✅ Backend connection established");
+    }
+  } catch (error: any) {
+    console.error("🔌 Backend connection check failed:", error);
+    backendStatus.value = "disconnected";
+  }
+});
+
+// Helper function for button text
+function getButtonText(): string {
+  if (backendStatus.value === "disconnected") {
+    return "Start Backend Server First";
+  }
+  if (!uploadedFiles.value.pitchDeck) {
+    return "Upload Pitch Deck to Begin";
+  }
+  if (!selectedCategory.value) {
+    return "Select Startup Sector";
+  }
+  return "Upload Documents to Begin";
+}
 
 // Enhanced file validation with individual error tracking
-function validateFile(
-  file: File,
-  documentType: keyof typeof fileValidation
-): boolean {
+function validateFile(file: File, documentType: FileType): boolean {
   const rules = fileValidation[documentType];
 
   // Clear previous error
@@ -405,23 +507,21 @@ function validateFile(
 
   // Check file size
   if (file.size > rules.maxSize) {
-    const maxSizeMB = rules.maxSize / (1024 * 1024);
-    validationErrors.value[
-      documentType
-    ] = `File too large. Maximum size is ${maxSizeMB}MB`;
+    const maxSizeMB: number = rules.maxSize / (1024 * 1024);
+    validationErrors.value[documentType] =
+      `File too large. Maximum size is ${maxSizeMB}MB`;
     return false;
   }
 
   // Check file type
-  const fileName = file.name.toLowerCase();
-  const hasValidExtension = rules.extensions.some((ext) =>
+  const fileName: string = file.name.toLowerCase();
+  const hasValidExtension: boolean = rules.extensions.some((ext: string) =>
     fileName.endsWith(ext)
   );
 
   if (!hasValidExtension) {
-    validationErrors.value[
-      documentType
-    ] = `Invalid file type. Supported: ${rules.extensions.join(", ")}`;
+    validationErrors.value[documentType] =
+      `Invalid file type. Supported: ${rules.extensions.join(", ")}`;
     return false;
   }
 
@@ -429,10 +529,7 @@ function validateFile(
 }
 
 // File upload handler
-function handleFileUpload(
-  documentType: keyof typeof uploadedFiles.value,
-  file: File
-) {
+function handleFileUpload(documentType: FileType, file: File): void {
   if (!validateFile(file, documentType)) {
     return;
   }
@@ -449,337 +546,360 @@ function handleFileUpload(
 }
 
 // Change file handler
-function changeFile(documentType: keyof typeof uploadedFiles.value) {
+function changeFile(documentType: FileType): void {
   uploadedFiles.value[documentType] = null;
   uploadStates.value[documentType] = false;
   validationErrors.value[documentType] = "";
 }
 
 // Analysis handler
-async function handleAnalysis() {
+async function handleAnalysis(): Promise<void> {
   if (!isFormReady.value) return;
 
-  const analysisData = {
-    category: selectedCategory.value,
-    files: uploadedFiles.value,
-    transcriptText: transcriptText.value,
-    uploadedFileCount: uploadedFileCount.value,
-  };
+  try {
+    const analysisData = {
+      category: selectedCategory.value,
+      files: uploadedFiles.value,
+      transcriptText: transcriptText.value,
+      uploadedFileCount: uploadedFileCount.value,
+    };
 
-  analysisStore.runEnhancedAnalysis(analysisData);
-  router.push("/analysis-in-progress");
+    console.log("🚀 Starting analysis with:", analysisData);
+    await analysisStore.runEnhancedAnalysis(analysisData);
+    router.push("/app/analysis-in-progress");
+  } catch (error: any) {
+    console.error("❌ Analysis failed:", error);
+    alert(`Analysis failed: ${error.message}`);
+  }
 }
 
-// ✅ HELPER FUNCTIONS - UPDATED FOR NEW STRUCTURE
+// ✅ HELPER FUNCTIONS - PROPERLY TYPED
 function getDocumentType(key: string): string {
-  const types = {
+  const types: Record<string, string> = {
     pitchDeck: "Pitch Deck",
     financialModel: "Financial Projections",
     founderProfiles: "Founder & Team Profiles",
     marketResearch: "Market Research & Analysis",
     tractionData: "Traction & Growth Metrics",
   };
-  return types[key as keyof typeof types] || key;
+  return types[key] || key;
 }
 
 function getFileIcon(key: string): string {
-  const icons = {
+  const icons: Record<string, string> = {
     pitchDeck: "ri-presentation-fill",
     financialModel: "ri-line-chart-fill",
     founderProfiles: "ri-team-fill",
     marketResearch: "ri-bar-chart-box-fill",
     tractionData: "ri-rocket-fill",
   };
-  return icons[key as keyof typeof icons] || "ri-file-fill";
+  return icons[key] || "ri-file-fill";
 }
 
 function formatFileSize(bytes: number): string {
   if (bytes === 0) return "0 Bytes";
   const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const sizes: string[] = ["Bytes", "KB", "MB", "GB"];
+  const i: number = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 </script>
 
 <style lang="scss" scoped>
-$color-accent: #00d4ff;
+// Import variables
+@import "@/styles/variables.scss";
 
-// Enhanced typography with bigger fonts
-.subtitle {
-  text-align: center;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 20px;
-  margin-bottom: 50px;
-  line-height: 1.4;
+// Font imports
+@font-face {
+  font-family: "AlibabaSans";
+  src: url("https://assets-persist.lovart.ai/agent-static-assets/AlibabaSans-Regular.otf")
+    format("opentype");
+  font-weight: normal;
 }
 
-// Enhanced dropdown styling
+.page-wrapper {
+  font-family: "AlibabaSans", sans-serif;
+  background: linear-gradient(135deg, #1a1a1a 0%, #0c0c0c 100%);
+  color: #ffffff;
+  min-height: 100vh;
+  padding: 40px 20px;
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+
+  h1 {
+    font-size: 36px;
+    font-weight: bold;
+    color: #ffffff;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+
+  .subtitle {
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.7);
+    text-align: center;
+    margin-bottom: 40px;
+  }
+}
+
+// Backend status
+.backend-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-radius: 12px;
+  margin-bottom: 30px;
+  font-weight: 500;
+  font-size: 14px;
+
+  &.connected {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    color: #22c55e;
+  }
+
+  &.disconnected {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+  }
+}
+
+// Form styling
+.form-group {
+  margin-bottom: 30px;
+
+  label {
+    display: block;
+    font-size: 16px;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 12px;
+
+    .mandatory {
+      color: #ef4444;
+    }
+
+    .optional {
+      color: rgba(255, 255, 255, 0.5);
+      font-weight: 400;
+      font-size: 14px;
+    }
+  }
+}
+
 .dropdown-wrapper {
   position: relative;
 
   .enhanced-select {
     width: 100%;
-    font-size: 18px;
-    font-weight: 500;
-    padding: 20px 50px 20px 20px;
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: #ffffff;
+    font-size: 16px;
+    appearance: none;
 
     option {
-      background-color: #1a1a1a;
+      background: #1a1a1a;
       color: #ffffff;
-      padding: 12px;
-      font-size: 16px;
-
-      &:hover {
-        background-color: #2a2a2a;
-      }
     }
   }
 
   .dropdown-icon {
     position: absolute;
-    right: 20px;
+    right: 16px;
     top: 50%;
     transform: translateY(-50%);
     color: $color-accent;
-    font-size: 24px;
     pointer-events: none;
-    transition: transform 0.3s ease;
-  }
-
-  &:hover .dropdown-icon {
-    transform: translateY(-50%) rotate(180deg);
   }
 }
 
-// Field-specific error styling
-.field-error {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  padding: 12px 16px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 10px;
-  color: #ef4444;
-  font-size: 14px;
-  font-weight: 500;
-
-  &.compact {
-    padding: 8px 12px;
-    font-size: 12px;
-    border-radius: 8px;
-  }
-
-  i {
-    font-size: 16px;
-    flex-shrink: 0;
-  }
+// Upload sections
+.upload-wrapper {
+  margin-bottom: 20px;
 }
 
-// Transcript input section
-.transcript-input {
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 16px;
-  padding: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
+.additional-documents {
+  margin: 40px 0;
 
-.input-description {
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 15px;
-  margin-bottom: 16px;
-  line-height: 1.4;
-}
-
-.char-counter {
-  position: absolute;
-  bottom: 12px;
-  right: 16px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
-  background: rgba(0, 0, 0, 0.5);
-  padding: 4px 8px;
-  border-radius: 6px;
-}
-
-// Transcript file notice
-.transcript-file-notice {
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin: 20px 0;
-
-  .notice-content {
+  .section-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 8px;
     display: flex;
     align-items: center;
-    gap: 12px;
-    color: #22c55e;
-    font-size: 15px;
-    font-weight: 500;
+    gap: 10px;
 
     i {
-      font-size: 20px;
+      color: $color-accent;
+    }
+
+    .optional {
+      font-size: 14px;
+      font-weight: 400;
+      color: rgba(255, 255, 255, 0.5);
+    }
+  }
+
+  .section-subtitle {
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 24px;
+  }
+}
+
+.upload-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.upload-item {
+  .upload-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    i {
+      color: $color-accent;
     }
   }
 }
 
-// Enhanced button styling
+// Field errors
+.field-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #ef4444;
+  font-size: 14px;
+  margin-top: 8px;
+
+  &.compact {
+    font-size: 12px;
+    margin-top: 4px;
+  }
+
+  i {
+    font-size: 16px;
+  }
+}
+
+// Transcript input
+.transcript-input {
+  textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: #ffffff;
+    font-size: 14px;
+    resize: vertical;
+    font-family: "AlibabaSans", sans-serif;
+
+    &::placeholder {
+      color: rgba(255, 255, 255, 0.4);
+    }
+  }
+
+  .char-counter {
+    text-align: right;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 8px;
+  }
+}
+
+// Analyze button
 .analyze-btn {
   width: 100%;
-  padding: 24px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 40px;
+
+  &.active {
+    background: linear-gradient(135deg, $color-accent, $color-accent-darker);
+    border-color: $color-accent;
+    box-shadow: 0 0 30px rgba($color-accent, 0.3);
+
+    &:hover {
+      box-shadow: 0 0 40px rgba($color-accent, 0.5);
+      transform: translateY(-2px);
+    }
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+
+    &:hover {
+      transform: none;
+      box-shadow: none;
+    }
+  }
 
   .btn-content {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 16px;
+    gap: 12px;
 
     i {
-      font-size: 28px;
+      font-size: 24px;
     }
 
     .btn-text {
       display: flex;
       flex-direction: column;
-      align-items: flex-start;
+      align-items: center;
 
       .main-text {
-        font-size: 20px;
+        font-size: 18px;
         font-weight: 600;
-        letter-spacing: 0.5px;
+        color: #ffffff;
       }
 
       .sub-text {
         font-size: 14px;
-        opacity: 0.8;
-        margin-top: 2px;
+        color: rgba(255, 255, 255, 0.8);
+        margin-top: 4px;
       }
     }
   }
 }
 
-// Enhanced section titles
-.section-title {
-  font-size: 24px;
-
-  .optional {
-    font-size: 16px;
-  }
-}
-
-.section-subtitle {
-  font-size: 17px;
-}
-
-.upload-section-title {
-  font-size: 20px;
-}
-
-.upload-label {
-  font-size: 16px;
-}
-
-label {
-  font-size: 20px;
-}
-
-// Base styles
-.mandatory {
-  color: #ff4d4d;
-  font-weight: bold;
-  margin-left: 4px;
-}
-
-.optional {
-  color: rgba(255, 255, 255, 0.5);
-  font-weight: normal;
-}
-
-.upload-section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  margin-bottom: 12px;
-  color: rgba(255, 255, 255, 0.9);
-
-  i {
-    color: $color-accent;
-    font-size: 22px;
-  }
-}
-
-.additional-documents {
-  margin: 40px 0;
-  padding: 30px;
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: #ffffff;
-
-  i {
-    color: $color-accent;
-    font-size: 26px;
-  }
-}
-
-.section-subtitle {
-  color: rgba(255, 255, 255, 0.6);
-  margin-bottom: 25px;
-}
-
-.upload-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 25px;
-}
-
-.upload-item {
-  .upload-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 500;
-    margin-bottom: 12px;
-    color: rgba(255, 255, 255, 0.8);
-
-    i {
-      color: $color-accent;
-      font-size: 18px;
-    }
-  }
-}
-
+// Document summary
 .document-summary {
   margin: 30px 0;
-  padding: 25px;
-  background: linear-gradient(
-    135deg,
-    rgba(0, 212, 255, 0.05) 0%,
-    rgba(0, 212, 255, 0.01) 100%
-  );
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 12px;
-  border: 1px solid rgba($color-accent, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 
   h4 {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     color: #ffffff;
-    margin-bottom: 15px;
-    font-size: 18px;
+    margin-bottom: 16px;
 
     i {
       color: $color-accent;
@@ -797,225 +917,50 @@ label {
   align-items: center;
   gap: 12px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.02);
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
 
-  > i {
+  i {
     color: $color-accent;
     font-size: 20px;
-    min-width: 20px;
-  }
-}
-
-.summary-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-
-  .doc-type {
-    color: #ffffff;
-    font-weight: 500;
-    font-size: 15px;
   }
 
-  .file-name {
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 13px;
-    word-break: break-all;
+  .summary-info {
+    flex: 1;
+
+    .doc-type {
+      font-weight: 500;
+      color: #ffffff;
+      font-size: 14px;
+    }
+
+    .file-name {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 12px;
+    }
+
+    .file-size {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 11px;
+    }
   }
 
-  .file-size {
-    color: rgba(255, 255, 255, 0.5);
+  .doc-status {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     font-size: 12px;
-  }
-}
 
-.doc-status {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 500;
-
-  &.verified {
-    background: rgba(34, 197, 94, 0.2);
-    color: rgb(34, 197, 94);
-    border: 1px solid rgba(34, 197, 94, 0.3);
-  }
-}
-
-// Keep all your existing base styles...
-@font-face {
-  font-family: "AlibabaSans";
-  src: url("https://assets-persist.lovart.ai/agent-static-assets/AlibabaSans-Regular.otf")
-    format("opentype");
-  font-weight: normal;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "AlibabaSans";
-  src: url("https://assets-persist.lovart.ai/agent-static-assets/AlibabaSans-Medium.otf")
-    format("opentype");
-  font-weight: 500;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "AlibabaSans";
-  src: url("https://assets-persist.lovart.ai/agent-static-assets/Alibaba-PuHuiTi-Bold.otf")
-    format("opentype");
-  font-weight: bold;
-  font-style: normal;
-}
-
-.page-wrapper {
-  font-family: "AlibabaSans", sans-serif;
-  background-color: #1a1a1a;
-  color: #ffffff;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: calc(100vh - 90px);
-  padding: 40px 20px;
-  background: linear-gradient(135deg, #1a1a1a 0%, #0c0c0c 100%);
-}
-
-.container {
-  width: 100%;
-  max-width: 1100px;
-  padding: 40px;
-  position: relative;
-}
-
-.container::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(
-    135deg,
-    rgba(0, 212, 255, 0.05) 0%,
-    rgba(0, 212, 255, 0.01) 100%
-  );
-  border-radius: 24px;
-  z-index: 0;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-}
-
-h1 {
-  font-size: 48px;
-  font-weight: bold;
-  margin-bottom: 20px;
-  text-align: center;
-  background: linear-gradient(90deg, #ffffff, $color-accent);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  letter-spacing: 1px;
-}
-
-.form-group {
-  margin-bottom: 30px;
-  position: relative;
-  z-index: 1;
-}
-
-.glassmorphism {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(0, 212, 255, 0.3);
-  border-radius: 12px;
-  padding: 16px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 212, 255, 0.1),
-    inset 0 0 8px rgba(0, 212, 255, 0.05);
-  transition: all 0.3s ease;
-  color: rgba(255, 255, 255, 0.8);
-  position: relative;
-  z-index: 1;
-}
-
-.glassmorphism:hover,
-.glassmorphism:focus-within {
-  border-color: rgba(0, 212, 255, 0.6);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 212, 255, 0.2),
-    inset 0 0 12px rgba(0, 212, 255, 0.1), 0 0 15px rgba(0, 212, 255, 0.1);
-}
-
-select,
-textarea {
-  width: 100%;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: rgba(255, 255, 255, 0.9);
-  font-family: "AlibabaSans", sans-serif;
-  font-size: 16px;
-}
-
-select {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-}
-
-textarea {
-  min-height: 120px;
-  resize: vertical;
-  line-height: 1.5;
-  position: relative;
-}
-
-.analyze-btn {
-  width: 100%;
-  font-weight: 600;
-  background: rgba(0, 212, 255, 0.1);
-  color: rgba(0, 212, 255, 0.5);
-  border: 1px solid rgba(0, 212, 255, 0.3);
-  cursor: not-allowed;
-  letter-spacing: 1px;
-  transition: all 0.3s ease;
-
-  &.active {
-    background: linear-gradient(90deg, $color-accent 0%, #00a2ff 100%);
-    color: #ffffff;
-    cursor: pointer;
-    box-shadow: 0 4px 20px rgba(0, 212, 255, 0.3);
-
-    &:hover {
-      box-shadow: 0 6px 25px rgba(0, 212, 255, 0.4);
-      transform: translateY(-2px);
+    &.verified {
+      color: #22c55e;
     }
   }
 }
 
-// Responsive design
+// Responsive
 @media (max-width: 768px) {
-  h1 {
-    font-size: 36px;
-  }
-
-  .subtitle {
-    font-size: 18px;
-  }
-
   .upload-grid {
     grid-template-columns: 1fr;
-  }
-
-  .analyze-btn .btn-content {
-    flex-direction: column;
-    gap: 12px;
-
-    .btn-text {
-      align-items: center;
-    }
   }
 }
 </style>

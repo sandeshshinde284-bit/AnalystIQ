@@ -10,5 +10,5 @@
 
 <script setup lang="ts">
 // The new, simpler header for the app itself
-import AppHeader from "@/components/Organisms/AppHeader.vue";
+import AppHeader from "../Organisms/AppHeader.vue";
 </script>

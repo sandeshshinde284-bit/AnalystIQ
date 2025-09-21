@@ -1,3 +1,5 @@
+<!-- C:\Google-Hack\Projects\AnalystIQ\frontend\src\components\Atoms\MiniChart.vue -->
+
 <template>
   <div class="mini-chart-container">
     <canvas ref="miniChartCanvas"></canvas>
