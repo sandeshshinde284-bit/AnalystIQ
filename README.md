@@ -4,7 +4,7 @@
 
 ## 🚀 Live Demo
 - **Frontend:** https://analyst-iq-5b9e1.web.app
-- **Backend API:** https://analyst-iq-backend-631446553603.us-central1.run.app
+- **Backend API:** https://analyst-iq-backend-631446553603.us-central1.run.app/api
 
 ## 📝 Project Overview
 AI-powered platform that automatically analyzes startup pitch decks, extracts key investment metrics, and provides data-driven investment recommendations for VCs and angel investors.
