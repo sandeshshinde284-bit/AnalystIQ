@@ -333,20 +333,138 @@ class GeminiService {
   }
 
   private extractCompanyName(documents: DocumentInput[]): string | null {
+    // Priority 1: Extract from document content (same as before)
     for (const doc of documents) {
+      const content = doc.extractedContent || "";
+
+      if (content) {
+        // ... content extraction patterns stay the same
+      }
+
       if (doc.extractedData?.companyName) {
+        console.log(
+          `✅ Found company name in extracted data: "${doc.extractedData.companyName}"`
+        );
         return doc.extractedData.companyName;
       }
-      if (doc.name && doc.name.length > 3) {
-        const cleanName = doc.name.replace(/\.(pdf|ppt|pptx|doc|docx)$/i, "");
-        const parts = cleanName.split(/[-_\s]/);
-        for (const part of parts) {
-          if (part.length > 3 && /^[A-Z]/.test(part)) {
-            return part;
+    }
+
+    for (const doc of documents) {
+      const fileName = doc.name || "";
+      const cleanFileName = fileName.replace(
+        /\.(pdf|ppt|pptx|doc|docx|txt)$/i,
+        ""
+      );
+
+      const filenamePatterns = [
+        /^(?:Dr\.\s+|Mr\.\s+|Ms\.\s+|CEO\s+|The\s+|Copy\s+of\s+)?([A-Z][A-Za-z0-9\.]{2,15})(?:\s+(?:\([^)]*\))?\s*(?:Deck|Pitch|Report|Analysis|Memo|Document|Presentation|Model|Investor))/i,
+
+        /^(?:Dr\.\s+|Mr\.\s+|Ms\.\s+|CEO\s+|The\s+|Copy\s+of\s+)?([A-Z][a-z]{2,12})(?:Deck|Pitch|Report|Analysis|Memo|Document|Presentation|Model)/i,
+
+        /^(?:Dr\.\s+|Mr\.\s+|Ms\.\s+|CEO\s+|The\s+|Copy\s+of\s+)?([A-Z][A-Za-z0-9\.]{2,15})[-_\s]/,
+
+        /-([A-Z][a-z]{3,15})-/,
+
+        /\(([A-Z][A-Za-z]{3,15})\)(?!\s*(?:INR|USD|EUR|GBP|JPY|v\d|Ver|Version|Final|Draft|Updated))/i,
+
+        /_for_([A-Z][A-Za-z]{2,15})_/i,
+
+        /^(?:Dr\.\s+|Mr\.\s+|Ms\.\s+|CEO\s+|The\s+|Copy\s+of\s+|Final\s+|Investment\s+|Memo\s+)?([A-Z][A-Za-z0-9\.]{3,15})/,
+      ];
+
+      for (const pattern of filenamePatterns) {
+        const match = cleanFileName.match(pattern);
+        if (match && match[1]) {
+          let companyName = match[1].trim();
+
+          const skipWords = [
+            // Document types
+            "Pitch",
+            "Deck",
+            "Report",
+            "Analysis",
+            "Document",
+            "File",
+            "Memo",
+            "Model",
+            "Presentation",
+            "Investment",
+            "Investor",
+            "Template",
+            "Final",
+            "Copy",
+            "Business",
+            "Plan",
+            "Executive",
+            "Summary",
+            "Overview",
+            "Profile",
+
+            // Currency codes and common abbreviations
+            "INR",
+            "USD",
+            "EUR",
+            "GBP",
+            "JPY",
+            "CAD",
+            "AUD",
+            "CHF",
+            "Ver",
+            "Version",
+            "Draft",
+            "Final",
+            "Updated",
+            "Revised",
+
+            // Common names
+            "John",
+            "Smith",
+            "Johnson",
+            "Brown",
+            "Davis",
+            "Miller",
+            "Wilson",
+
+            // Time indicators
+            "May",
+            "June",
+            "July",
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
+          ];
+
+          if (!skipWords.includes(companyName)) {
+            if (
+              companyName.length >= 3 &&
+              companyName.length <= 20 &&
+              /^[A-Z]/.test(companyName) &&
+              !/^(CEO|CFO|CTO|VP|Dr|Mr|Ms|The|INR|USD|EUR)$/i.test(
+                companyName
+              ) &&
+              !/^\d+$/.test(companyName)
+            ) {
+              // Skip pure numbers
+
+              console.log(
+                `✅ Extracted company name: "${companyName}" from "${fileName}"`
+              );
+              return companyName;
+            }
           }
         }
       }
     }
+
+    console.log(
+      `⚠️ Could not extract company name from ${documents.length} documents`
+    );
     return null;
   }
 

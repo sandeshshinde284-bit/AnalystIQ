@@ -3,6 +3,10 @@
 import geminiService from "../services/gemini.service.js";
 import documentAIService from "../services/documentAI.service.js";
 import { googleCloudConfig } from "../config/googleCloud.js";
+import fetch from "node-fetch";
+
+const AI_FUNCTION_URL =
+  "https://analyze-document-631446553603.us-central1.run.app";
 
 // For now, let's use a simplified approach without Firebase imports
 // We'll add them back once the basic structure works
@@ -10,6 +14,33 @@ import { googleCloudConfig } from "../config/googleCloud.js";
 // Types for Analysis Service
 export interface ProgressCallback {
   (message: string, progress: number): void;
+}
+
+// ADD THESE INTERFACES AT THE TOP
+interface CloudFunctionResponse {
+  status: "success" | "error";
+  extracted_data?: {
+    full_text: string;
+    confidence: number;
+    page_count: number;
+    entities: any[];
+    tables: any[];
+    form_fields: any;
+    key_value_pairs: any[];
+  };
+  ai_insights?: {
+    document_type: string;
+    summary: string;
+    key_insights: string[];
+    financial_metrics: any;
+    risk_analysis: string;
+    recommendations: string[];
+    data_quality_score: number;
+    confidence_level: string;
+  };
+  processing_info?: any;
+  message?: string;
+  error_type?: string;
 }
 
 export interface ProcessedDocument {
@@ -172,37 +203,50 @@ class AnalysisService {
     progressCallback?: ProgressCallback
   ): Promise<ProcessedDocument[]> {
     const processedDocs: ProcessedDocument[] = [];
-    const totalFiles = files.length;
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      // ✅ FIX: Pass the UploadedFile object to the helper
-      const documentType = this.getDocumentType(file);
-
-      const baseProgress = (i / totalFiles) * 40; // 40% for document processing
+      const baseProgress = (i / files.length) * 40;
 
       try {
-        // ✅ FIX: Pass the file's BUFFER to the downstream service
-        const result = await documentAIService.processDocument(
-          file, // Pass the raw data buffer
-          documentType,
-          (message: string, progress: number) => {
-            const totalProgress =
-              baseProgress + (progress / 100) * (40 / totalFiles);
-            progressCallback?.(message, totalProgress);
-          }
+        progressCallback?.(
+          `Processing ${file.originalname} with AI...`,
+          baseProgress
         );
 
-        // Add fieldname for compatibility
-        const processedDoc: ProcessedDocument = {
-          ...result,
-          // ✅ FIX: Pass the UploadedFile object to the helper
-          fieldname: this.getFieldName(file, documentType),
-        };
+        // 🔥 NEW: Call your Cloud Function instead of local services
+        const base64Content = file.buffer.toString("base64");
 
-        processedDocs.push(processedDoc);
+        const response = await fetch(AI_FUNCTION_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pdf_content: base64Content }),
+        });
+
+        const aiResult = (await response.json()) as CloudFunctionResponse;
+
+        if (aiResult.status === "success" && aiResult.extracted_data) {
+          const processedDoc: ProcessedDocument = {
+            id: `doc_${Date.now()}_${i}`,
+            name: file.originalname,
+            type: this.getDocumentType(file),
+            size: file.size,
+            extractedContent: aiResult.extracted_data.full_text || "",
+            extractedData: aiResult.extracted_data,
+            confidence: aiResult.extracted_data.confidence || 0.8,
+            processedAt: new Date().toISOString(),
+            fieldname: file.fieldname || "document",
+          };
+
+          processedDocs.push(processedDoc);
+          progressCallback?.(
+            `✅ Processed ${file.originalname}`,
+            baseProgress + 30
+          );
+        } else {
+          throw new Error(`AI processing failed: ${aiResult.message}`);
+        }
       } catch (error) {
-        // ✅ FIX: Use originalname for logging, as 'name' doesn't exist
         console.error(`Failed to process ${file.originalname}:`, error);
         // Continue with other files
       }
@@ -210,6 +254,7 @@ class AnalysisService {
 
     return processedDocs;
   }
+
   private getDocumentType(
     file: UploadedFile
   ):
