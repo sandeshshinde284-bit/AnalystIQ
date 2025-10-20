@@ -11,7 +11,11 @@ type ProgressCallback = (message: string, progress: number) => void;
 // Format: https://region-project.cloudfunctions.net/function-name
 const CLOUD_FUNCTION_URL =
   process.env.VUE_APP_CLOUD_FUNCTION_URL ||
-  "https://analyze-document-631446553603.us-central1.run.app";
+  (() => {
+    throw new Error(
+      "CLOUD_FUNCTION_URL environment variable not set. Check your .env file."
+    );
+  })();
 
 console.log("🌐 Using Cloud Function URL:", CLOUD_FUNCTION_URL);
 
