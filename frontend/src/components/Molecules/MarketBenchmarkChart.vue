@@ -1,7 +1,9 @@
 <!-- C:\Google-Hack\Projects\AnalystIQ\frontend\src\components\Molecules\MarketBenchmarkChart.vue -->
+<!-- UPDATED: Uses real analysis data instead of hardcoded mock data -->
 
 <template>
   <div class="benchmark-charts">
+    <!-- Competitive Analysis Chart -->
     <div class="chart-section">
       <h4><i class="ri-bar-chart-line"></i> Competitive Analysis</h4>
       <div class="chart-wrapper">
@@ -14,6 +16,7 @@
       </div>
     </div>
 
+    <!-- Market Growth Trajectory Chart -->
     <div class="chart-section">
       <h4><i class="ri-line-chart-line"></i> Market Growth Trajectory</h4>
       <div class="chart-wrapper">
@@ -26,6 +29,7 @@
       </div>
     </div>
 
+    <!-- Performance Radar Chart -->
     <div class="chart-section">
       <h4><i class="ri-radar-chart-line"></i> Performance Radar</h4>
       <div class="chart-wrapper">
@@ -41,8 +45,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed } from "vue";
 import BaseChart from "../Atoms/BaseChart.vue";
+import { useAnalysisStore } from "@/stores/analysisStore";
 
 interface Props {
   startupName?: string;
@@ -52,95 +57,103 @@ const props = withDefaults(defineProps<Props>(), {
   startupName: "Your Startup",
 });
 
-console.log("MarketBenchmarkChart loaded with startup:", props.startupName); // ✅ Debug log
+const analysisStore = useAnalysisStore();
+const analysisData = computed(() => analysisStore.analysisResult);
 
-// ✅ Simple static data first
-const competitorData = ref({
-  labels: [
-    props.startupName,
-    "Competitor A",
-    "Competitor B",
-    "Competitor C",
-    "Market Leader",
-  ],
-  datasets: [
-    {
-      label: "Revenue ($M)",
-      data: [1.2, 0.8, 2.1, 1.5, 5.2],
-      backgroundColor: [
-        "rgba(0, 212, 255, 0.8)",
-        "rgba(255, 255, 255, 0.2)",
-        "rgba(255, 255, 255, 0.2)",
-        "rgba(255, 255, 255, 0.2)",
-        "rgba(255, 255, 255, 0.2)",
-      ],
-      borderColor: [
-        "#00d4ff",
-        "rgba(255, 255, 255, 0.5)",
-        "rgba(255, 255, 255, 0.5)",
-        "rgba(255, 255, 255, 0.5)",
-        "rgba(255, 255, 255, 0.5)",
-      ],
-      borderWidth: 2,
-    },
-  ],
+// ✅ COMPETITIVE ANALYSIS - from analysisStore chart data
+const competitorData = computed(() => {
+  const chartData = analysisStore.getAllChartsData();
+  const compAnalysis = chartData.competitiveAnalysis;
+
+  return {
+    labels: compAnalysis.map((c: any) => c.company),
+    datasets: [
+      {
+        label: "Revenue ($M)",
+        data: compAnalysis.map((c: any) => c.revenue),
+        backgroundColor: [
+          "rgba(0, 212, 255, 0.8)", // Target company - highlighted
+          "rgba(255, 255, 255, 0.2)",
+          "rgba(255, 255, 255, 0.2)",
+          "rgba(255, 255, 255, 0.2)",
+          "rgba(255, 255, 255, 0.2)",
+        ],
+        borderColor: [
+          "#00d4ff",
+          "rgba(255, 255, 255, 0.5)",
+          "rgba(255, 255, 255, 0.5)",
+          "rgba(255, 255, 255, 0.5)",
+          "rgba(255, 255, 255, 0.5)",
+        ],
+        borderWidth: 2,
+      },
+    ],
+  };
 });
 
-const marketGrowthData = ref({
-  labels: ["2020", "2021", "2022", "2023", "2024", "2025E", "2026E", "2027E"],
-  datasets: [
-    {
-      label: "Total Addressable Market ($B)",
-      data: [1.2, 1.5, 1.9, 2.1, 2.5, 3.2, 4.1, 5.2],
-      borderColor: "#00d4ff",
-      backgroundColor: "rgba(0, 212, 255, 0.1)",
-      fill: true,
-      tension: 0.4,
-      pointBackgroundColor: "#00d4ff",
-      pointBorderColor: "#ffffff",
-      pointBorderWidth: 2,
-      pointRadius: 6,
-    },
-  ],
+// ✅ MARKET GROWTH - from analysisStore chart data
+const marketGrowthData = computed(() => {
+  const chartData = analysisStore.getAllChartsData();
+  const marketGrowth = chartData.marketGrowth;
+
+  return {
+    labels: marketGrowth.map((m: any) => m.year),
+    datasets: [
+      {
+        label: "Total Addressable Market ($B)",
+        data: marketGrowth.map((m: any) => m.value),
+        borderColor: "#00d4ff",
+        backgroundColor: "rgba(0, 212, 255, 0.1)",
+        fill: true,
+        tension: 0.4,
+        pointBackgroundColor: "#00d4ff",
+        pointBorderColor: "#ffffff",
+        pointBorderWidth: 2,
+        pointRadius: 6,
+      },
+    ],
+  };
 });
 
-const radarData = ref({
-  labels: [
-    "Team Experience",
-    "Product Innovation",
-    "Market Opportunity",
-    "Traction",
-    "Financial Health",
-    "Competitive Position",
-  ],
-  datasets: [
-    {
-      label: props.startupName,
-      data: [9, 8, 7, 6, 8, 7],
-      backgroundColor: "rgba(0, 212, 255, 0.2)",
-      borderColor: "#00d4ff",
-      borderWidth: 3,
-      pointBackgroundColor: "#00d4ff",
-      pointBorderColor: "#ffffff",
-      pointBorderWidth: 2,
-      pointRadius: 6,
-    },
-    {
-      label: "Industry Average",
-      data: [6, 6, 6, 6, 6, 6],
-      backgroundColor: "rgba(255, 255, 255, 0.05)",
-      borderColor: "rgba(255, 255, 255, 0.3)",
-      borderWidth: 2,
-      pointBackgroundColor: "rgba(255, 255, 255, 0.3)",
-      pointBorderColor: "#ffffff",
-      pointBorderWidth: 1,
-      pointRadius: 4,
-    },
-  ],
+// ✅ PERFORMANCE RADAR - from analysisStore chart data
+const radarData = computed(() => {
+  const chartData = analysisStore.getAllChartsData();
+  const performanceRadar = chartData.performanceRadar;
+
+  const labels = Object.keys(performanceRadar);
+  const values = Object.values(performanceRadar) as number[];
+
+  return {
+    labels: labels,
+    datasets: [
+      {
+        label: analysisData.value?.startupName || "Your Startup",
+        data: values,
+        backgroundColor: "rgba(0, 212, 255, 0.2)",
+        borderColor: "#00d4ff",
+        borderWidth: 3,
+        pointBackgroundColor: "#00d4ff",
+        pointBorderColor: "#ffffff",
+        pointBorderWidth: 2,
+        pointRadius: 6,
+      },
+      {
+        label: "Industry Average",
+        data: [65, 65, 65, 65, 65], // Fixed industry average
+        backgroundColor: "rgba(255, 255, 255, 0.05)",
+        borderColor: "rgba(255, 255, 255, 0.3)",
+        borderWidth: 2,
+        pointBackgroundColor: "rgba(255, 255, 255, 0.3)",
+        pointBorderColor: "#ffffff",
+        pointBorderWidth: 1,
+        pointRadius: 4,
+      },
+    ],
+  };
 });
 
-// ✅ Simplified options
-const barChartOptions = ref({
+// ✅ CHART OPTIONS - styling
+const barChartOptions = {
   responsive: true,
   maintainAspectRatio: false,
   scales: {
@@ -175,9 +188,9 @@ const barChartOptions = ref({
       },
     },
   },
-});
+};
 
-const lineChartOptions = ref({
+const lineChartOptions = {
   responsive: true,
   maintainAspectRatio: false,
   scales: {
@@ -189,11 +202,17 @@ const lineChartOptions = ref({
           return "$" + value + "B";
         },
       },
+      grid: {
+        color: "rgba(255, 255, 255, 0.1)",
+      },
     },
     x: {
       ticks: {
         color: "#8b93a7",
       },
+      grid: {
+        color: "rgba(255, 255, 255, 0.1)",
+      },
     },
   },
   plugins: {
@@ -206,11 +225,33 @@ const lineChartOptions = ref({
       },
     },
   },
-});
+};
 
-const radarChartOptions = ref({
+const radarChartOptions = {
   responsive: true,
   maintainAspectRatio: false,
+  scales: {
+    r: {
+      beginAtZero: true,
+      max: 100,
+      ticks: {
+        color: "#8b93a7",
+        backdropColor: "transparent",
+      },
+      grid: {
+        color: "rgba(255, 255, 255, 0.1)",
+      },
+      angleLines: {
+        color: "rgba(255, 255, 255, 0.1)",
+      },
+      pointLabels: {
+        color: "#ffffff",
+        font: {
+          size: 12,
+        },
+      },
+    },
+  },
   plugins: {
     legend: {
       position: "top" as const,
@@ -221,7 +262,7 @@ const radarChartOptions = ref({
       },
     },
   },
-});
+};
 </script>
 
 <style lang="scss" scoped>
@@ -254,14 +295,8 @@ const radarChartOptions = ref({
 
 .chart-wrapper {
   width: 100%;
-  height: 300px; /* ✅ Fixed height */
+  height: 300px;
   position: relative;
-  background: rgba(
-    0,
-    0,
-    0,
-    0.1
-  ); /* ✅ Temporary background to see if container is there */
   border-radius: 8px;
 }
 </style>

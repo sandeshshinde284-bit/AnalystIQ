@@ -282,19 +282,32 @@
         <button
           type="submit"
           class="analyze-btn glassmorphism"
-          :class="{ active: isFormReady }"
-          :disabled="!isFormReady"
+          :class="{
+            active: isFormReady && !isSubmitting,
+            loading: isSubmitting,
+          }"
+          :disabled="!isFormReady || isSubmitting"
         >
           <div class="btn-content">
-            <i class="ri-brain-line"></i>
+            <i
+              :class="
+                isSubmitting ? 'ri-loader-line spinning' : 'ri-brain-line'
+              "
+            ></i>
             <div class="btn-text">
-              <span v-if="!isFormReady" class="main-text">{{
+              <span v-if="isSubmitting" class="main-text">
+                Analyzing Documents...
+              </span>
+              <span v-else-if="!isFormReady" class="main-text">{{
                 getButtonText()
               }}</span>
               <span v-else class="main-text">Generate Investment Analysis</span>
               <span v-if="isFormReady" class="sub-text"
                 >AI-powered startup evaluation & due diligence</span
               >
+              <span v-else-if="isSubmitting" class="sub-text">
+                Please wait while we process your documents...
+              </span>
             </div>
           </div>
         </button>
@@ -308,6 +321,7 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAnalysisStore } from "../stores/analysisStore";
 import FileUploadZone from "../components/Molecules/FileUploadZone.vue";
+const isSubmitting = ref(false);
 
 // ✅ Type definitions to fix TypeScript errors
 interface UploadedFiles {
@@ -554,8 +568,9 @@ function changeFile(documentType: FileType): void {
 
 // Analysis handler
 async function handleAnalysis(): Promise<void> {
-  if (!isFormReady.value) return;
+  if (!isFormReady.value || isSubmitting.value) return;
 
+  isSubmitting.value = true;
   try {
     const analysisData = {
       category: selectedCategory.value,
@@ -856,6 +871,22 @@ function formatFileSize(bytes: number): string {
     }
   }
 
+  &.loading {
+    cursor: not-allowed;
+    opacity: 0.8;
+
+    .spinning {
+      animation: spin 1s linear infinite;
+    }
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
   .btn-content {
     display: flex;
     align-items: center;
@@ -954,6 +985,15 @@ function formatFileSize(bytes: number): string {
     &.verified {
       color: #22c55e;
     }
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
   }
 }
 

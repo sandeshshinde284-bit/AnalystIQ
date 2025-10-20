@@ -1,20 +1,13 @@
-<!-- C:\Google-Hack\Projects\AnalystIQ\frontend\src\views\AnalysisResultsView.vue -->
+<!-- AnalysisResultsView.vue -->
 
 <template>
-  <div v-if="analysisData" class="page-wrapper">
+  <div v-if="analysisData" id="analysis-results-container" class="page-wrapper">
     <div class="container">
-      <!-- Enhanced Header with Investment Focus -->
+      <!-- Header -->
       <div class="header">
         <div class="header-main">
           <h1>Investment Analysis: {{ analysisData.startupName }}</h1>
           <div class="analysis-badges">
-            <div
-              v-if="isMultiDocumentAnalysis"
-              class="analysis-badge multi-doc"
-            >
-              <i class="ri-folder-check-line"></i>
-              Comprehensive Due Diligence
-            </div>
             <div
               class="analysis-badge confidence"
               :class="getConfidenceClass()"
@@ -24,434 +17,442 @@
             </div>
           </div>
         </div>
-        <h2>Analysis Date: {{ analysisData.analysisDate }}</h2>
-
-        <!-- Document Summary -->
-        <div v-if="analysisData.documentsAnalyzed" class="documents-analyzed">
-          <h3>
-            <i class="ri-file-list-line"></i> Due Diligence Documents Analyzed
-          </h3>
-          <div class="document-chips">
-            <div
-              v-for="doc in analysisData.documentsAnalyzed"
-              :key="doc.type"
-              class="document-chip"
-            >
-              <i :class="getDocumentIcon(doc.type)"></i>
-              <span>{{ getDocumentTypeName(doc.type) }}</span>
-              <div class="chip-status">
-                <i class="ri-check-line"></i>
-              </div>
-            </div>
-          </div>
-        </div>
+        <button class="export-btn primary" @click="handlePrintReport">
+          <i class="ri-download-line"></i>
+          📄 Print & Download as PDF
+        </button>
       </div>
 
-      <!-- Enhanced Recommendation Card -->
-      <div class="recommendation-card">
+      <!-- Recommendation Box -->
+      <div class="recommendation-box">
         <div class="recommendation-header">
-          <div class="recommendation-label">Investment Recommendation</div>
-          <div v-if="analysisData.analysisMetadata" class="analysis-depth">
-            {{ analysisData.analysisMetadata.analysisDepth.toUpperCase() }}
-            DUE DILIGENCE
-          </div>
+          <span class="label">INVESTMENT RECOMMENDATION</span>
+          <span class="badge complete">Analysis Complete</span>
         </div>
-        <div class="recommendation-verdict">
+        <h2 class="recommendation-text">
           {{ analysisData.recommendation.text }}
-        </div>
-        <div class="confidence-score">
-          <div class="score-value">
-            {{ analysisData.recommendation.score }}%
-          </div>
-          <div class="progress-container">
+        </h2>
+        <div class="recommendation-score">
+          <span class="score-label">Investment Score:</span>
+          <div class="score-bar">
             <div
-              class="progress-bar"
+              class="score-fill"
               :style="{ width: analysisData.recommendation.score + '%' }"
             ></div>
           </div>
-          <div
-            v-if="analysisData.analysisMetadata?.confidenceBoost"
-            class="confidence-boost"
+          <span class="score-value"
+            >{{ analysisData.recommendation.score }}/100</span
           >
-            +{{ analysisData.analysisMetadata.confidenceBoost }}% from
-            comprehensive analysis
-          </div>
         </div>
-        <div class="justification">
+        <p class="recommendation-justification">
           {{ analysisData.recommendation.justification }}
-        </div>
+        </p>
       </div>
 
-      <!-- Cross-Document Insights -->
-      <div
-        v-if="analysisData.crossDocumentInsights?.length"
-        class="cross-insights-section"
-      >
-        <h3><i class="ri-links-line"></i> Investment Due Diligence Insights</h3>
-        <div class="insights-grid">
-          <div
-            v-for="insight in analysisData.crossDocumentInsights"
-            :key="insight.type + insight.title"
-            class="insight-card"
-            :class="insight.status"
-          >
-            <div class="insight-header">
-              <div class="insight-icon" :class="insight.type">
-                <i :class="getInsightIcon(insight.type)"></i>
-              </div>
-              <div class="insight-meta">
-                <h4>{{ insight.title }}</h4>
-                <span class="insight-confidence"
-                  >{{ insight.confidence }} due diligence confidence</span
-                >
-              </div>
-              <div class="insight-status" :class="insight.status">
-                <i :class="getStatusIcon(insight.status)"></i>
-              </div>
-            </div>
-            <p class="insight-description">{{ insight.description }}</p>
-            <div v-if="insight.source" class="insight-source">
-              <i class="ri-file-text-line"></i>
-              Validated across: {{ insight.source.documents.join(", ") }}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Enhanced Tabs -->
-      <div class="tabs">
-        <div
+      <!-- Tabs Navigation -->
+      <div class="tabs-navigation">
+        <button
           v-for="tab in tabs"
           :key="tab.id"
-          class="tab"
-          :class="{ active: activeTab === tab.id }"
+          :class="['tab-btn', { active: activeTab === tab.id }]"
           @click="activeTab = tab.id"
         >
           <i :class="tab.icon"></i>
           {{ tab.name }}
-          <span v-if="getTabBadge(tab.id)" class="tab-badge">{{
-            getTabBadge(tab.id)
-          }}</span>
-        </div>
-      </div>
-
-      <!-- Content Section -->
-      <div class="content-wrapper">
-        <!-- Executive Summary -->
-        <div v-if="activeTab === 'summary'">
-          <div class="content-section">
-            <div class="section-title">Business Overview</div>
-            <div
-              class="section-content"
-              v-html="analysisData.summaryContent.businessOverview"
-            ></div>
-          </div>
-          <div class="content-section">
-            <div class="section-title">Team & Experience</div>
-            <div
-              class="section-content"
-              v-html="analysisData.summaryContent.teamExperience"
-            ></div>
-          </div>
-          <div class="content-section">
-            <div class="section-title">Product & Technology</div>
-            <div
-              class="section-content"
-              v-html="analysisData.summaryContent.productTech"
-            ></div>
-          </div>
-        </div>
-
-        <!-- Enhanced Risk Analysis -->
-        <div v-if="activeTab === 'risk'" class="risk-section">
-          <div v-if="analysisData.riskAssessment" class="risk-grid">
-            <div
-              v-for="risk in analysisData.riskAssessment"
-              :key="risk.type + risk.title"
-              class="risk-card"
-              :class="risk.level"
-            >
-              <div class="risk-header">
-                <div class="risk-level" :class="risk.level">
-                  <i :class="getRiskIcon(risk.level)"></i>
-                  {{ risk.level.toUpperCase() }} RISK
-                </div>
-                <h4>{{ risk.title }}</h4>
-              </div>
-              <p class="risk-description">{{ risk.description }}</p>
-              <div class="risk-mitigation">
-                <strong>Investment Mitigation:</strong> {{ risk.mitigation }}
-              </div>
-              <div class="risk-impact">
-                Portfolio Impact:
-                <span :class="risk.impact">{{ risk.impact }}</span>
-              </div>
-            </div>
-          </div>
-          <div v-else class="content-section">
-            <div class="section-title">Investment Risk Assessment</div>
-            <div class="section-content">
-              <p>
-                Comprehensive investment risk analysis based on due diligence
-                documentation and market benchmarking...
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Market Benchmarking -->
-        <div v-if="activeTab === 'market'" class="content-section">
-          <div class="section-title">
-            Market Benchmarking & Competitive Analysis
-          </div>
-          <div class="section-content">
-            <p>
-              Investment-grade market analysis and competitive positioning
-              assessment...
-            </p>
-            <MarketBenchmarkChart :startup-name="analysisData.startupName" />
-          </div>
-        </div>
-      </div>
-
-      <!-- Enhanced Key Financial Metrics -->
-      <div class="metrics-header">
-        <h3>Key Investment Metrics</h3>
-        <div class="metrics-info">
-          <div class="source-info-indicator">
-            <i class="ri-shield-check-line"></i>
-            <span
-              >{{
-                isMultiDocumentAnalysis ? "Cross-validated" : "Verified"
-              }}
-              financial data</span
-            >
-          </div>
-          <div v-if="analysisData.analysisMetadata" class="processing-info">
-            <i class="ri-time-line"></i>
-            <span
-              >Due diligence completed in
-              {{ analysisData.analysisMetadata.processingTime }}</span
-            >
-          </div>
-        </div>
-      </div>
-
-      <!-- 🔥 FIXED: MetricCard with proper event handling -->
-      <div class="metrics-container">
-        <div
-          v-for="metric in analysisData.keyMetrics"
-          :key="metric.label"
-          class="clickable-metric"
-          @click="handleMetricClick(metric)"
-        >
-          <MetricCard
-            :label="metric.label"
-            :value="metric.value"
-            :icon="getMetricIcon(metric.label)"
-            :icon-color="getMetricIconColor(metric.label)"
-            :chart-type="getChartType(metric.label)"
-            :chart-value="getChartValue(metric)"
-            :trend-data="getTrendData(metric.label)"
-            :show-chart="true"
-            :source="metric.source"
-            :trend="getMetricTrend(metric.label)"
-            :change="getMetricChange(metric.label)"
-          />
-        </div>
-      </div>
-
-      <!-- Analysis Metadata -->
-      <div v-if="analysisData.analysisMetadata" class="metadata-section">
-        <h3><i class="ri-information-line"></i> Due Diligence Summary</h3>
-        <div class="metadata-grid">
-          <div class="metadata-item">
-            <span class="metadata-label">Documents Analyzed</span>
-            <span class="metadata-value">{{
-              analysisData.analysisMetadata.documentsProcessed
-            }}</span>
-          </div>
-          <div class="metadata-item">
-            <span class="metadata-label">Analysis Depth</span>
-            <span class="metadata-value">{{
-              analysisData.analysisMetadata.analysisDepth
-            }}</span>
-          </div>
-          <div class="metadata-item">
-            <span class="metadata-label">Cross-Validation</span>
-            <span class="metadata-value">
-              {{
-                analysisData.analysisMetadata.crossValidationPerformed
-                  ? "Comprehensive"
-                  : "Standard"
-              }}
-            </span>
-          </div>
-          <div class="metadata-item">
-            <span class="metadata-label">Processing Time</span>
-            <span class="metadata-value">{{
-              analysisData.analysisMetadata.processingTime
-            }}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Loading/Error State -->
-  <div v-else class="page-wrapper">
-    <div class="container">
-      <h1 class="loading-text">
-        No investment analysis found. Please initiate a new analysis.
-      </h1>
-    </div>
-  </div>
-
-  <!-- 🔥 ENHANCED SOURCE MODAL -->
-  <div v-if="showSourceModal" class="modal-overlay" @click="closeSourceModal">
-    <div class="source-modal" @click.stop>
-      <div class="modal-header">
-        <div class="header-left">
-          <div class="verification-status">
-            <div class="status-dot verified"></div>
-            <span>Source Verified</span>
-          </div>
-          <h3>
-            <i class="ri-file-search-line"></i>
-            Investment Data Verification
-          </h3>
-        </div>
-        <button @click="closeSourceModal" class="close-btn">
-          <i class="ri-close-line"></i>
+          <span
+            v-if="tab.id === 'risk' && analysisData.riskAssessment"
+            class="tab-count"
+          >
+            {{ analysisData.riskAssessment.length }}
+          </span>
         </button>
       </div>
 
-      <div class="modal-content" v-if="selectedSource">
-        <!-- Document Source Section -->
-        <div class="source-section">
-          <div class="section-header">
-            <i class="ri-file-shield-line"></i>
-            <span>Document Source</span>
-            <div class="verification-badge verified">VERIFIED</div>
+      <!-- Tab Content -->
+      <div class="tab-content">
+        <!-- EXECUTIVE SUMMARY TAB -->
+        <div data-tab-pane v-show="activeTab === 'summary'" class="tab-pane">
+          <div class="summary-section">
+            <h3>Business Overview</h3>
+            <p>{{ analysisData.summaryContent.businessOverview }}</p>
           </div>
 
-          <div class="source-details-grid">
-            <div class="detail-item">
-              <div class="detail-label">Source Document</div>
-              <div class="detail-value document-ref">
-                <i
-                  :class="
-                    selectedSource?.type === 'document'
-                      ? 'ri-file-text-fill'
-                      : selectedSource?.type === 'cross-reference'
-                        ? 'ri-links-fill'
-                        : 'ri-calculator-fill'
-                  "
-                ></i>
-                {{ selectedSource?.location }}
-              </div>
-            </div>
+          <div class="summary-section">
+            <h3>Team & Experience</h3>
+            <p>{{ analysisData.summaryContent.teamExperience }}</p>
+          </div>
 
-            <div class="detail-item">
-              <div class="detail-label">Validation Method</div>
-              <div class="detail-value">
-                {{
-                  selectedSource?.type === "document"
-                    ? "Document Analysis + OCR"
-                    : selectedSource?.type === "cross-reference"
-                      ? "Cross-Document Validation"
-                      : "Financial Model Analysis"
-                }}
-              </div>
-            </div>
+          <div class="summary-section">
+            <h3>Product & Technology</h3>
+            <p>{{ analysisData.summaryContent.productTech }}</p>
+          </div>
 
-            <div class="detail-item">
-              <div class="detail-label">Investment Confidence</div>
-              <div class="confidence-display">
-                <div class="confidence-bar">
-                  <div
-                    class="confidence-fill"
-                    :class="selectedSource?.confidence?.toLowerCase()"
-                  ></div>
+          <!-- Key Metrics with Context -->
+          <div class="metrics-section">
+            <h3>Key Investment Metrics</h3>
+            <div class="metrics-grid">
+              <div
+                v-for="(metric, index) in analysisData.keyMetrics"
+                :key="index"
+                class="metric-card"
+              >
+                <div class="metric-header">
+                  <h4>{{ metric.label }}</h4>
+                  <span
+                    class="confidence-badge"
+                    :class="metric.source.confidence"
+                  >
+                    {{ metric.source.confidence }}
+                  </span>
                 </div>
-                <span
-                  class="confidence-text"
-                  :class="selectedSource?.confidence?.toLowerCase()"
-                >
-                  {{ selectedSource?.confidence }} Confidence ({{
-                    getConfidenceScore(selectedSource?.confidence)
-                  }}%)
-                </span>
+                <div class="metric-value">{{ metric.value }}</div>
+                <div class="metric-context">
+                  {{ getMetricContext(metric.label) }}
+                </div>
+                <button class="verify-btn" @click="openSourceModal(metric)">
+                  <i class="ri-search-line"></i>
+                  Verify Source
+                </button>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Verification Details -->
-        <div class="analysis-section">
-          <div class="section-header">
-            <i class="ri-check-double-line"></i>
-            <span>Due Diligence Details</span>
-            <div class="status-indicator">
-              <div class="status-dot complete"></div>
-              <span>Analysis Complete</span>
+        <!-- INVESTMENT RISKS TAB -->
+        <div data-tab-pane v-show="activeTab === 'risk'" class="tab-pane">
+          <h3>Risk Assessment</h3>
+          <div
+            v-if="
+              analysisData.riskAssessment &&
+              analysisData.riskAssessment.length > 0
+            "
+            class="risks-grid"
+          >
+            <div
+              v-for="(risk, index) in analysisData.riskAssessment"
+              :key="index"
+              class="risk-card"
+              :class="`risk-${risk.level}`"
+            >
+              <div class="risk-header">
+                <span class="risk-type">{{ formatRiskType(risk.type) }}</span>
+                <span class="risk-level" :class="risk.level">{{
+                  risk.level.toUpperCase()
+                }}</span>
+              </div>
+              <h4>{{ risk.title }}</h4>
+              <p class="risk-description">{{ risk.description }}</p>
+              <div class="risk-details">
+                <div class="detail-item">
+                  <strong>Mitigation:</strong>
+                  <p>{{ risk.mitigation }}</p>
+                </div>
+                <div class="detail-item">
+                  <strong>Impact:</strong>
+                  <p>{{ risk.impact }}</p>
+                </div>
+              </div>
             </div>
           </div>
-
-          <div class="analysis-content">
-            <div class="analysis-item">
-              <strong>Data Validation:</strong>
-              <p>{{ selectedSource?.details }}</p>
-            </div>
-
-            <div
-              v-if="selectedSource?.type === 'cross-reference'"
-              class="analysis-item"
-            >
-              <strong>Cross-Document Validation:</strong>
-              <p>
-                Financial data verified across multiple due diligence documents
-                ensuring accuracy and consistency for investment
-                decision-making.
-              </p>
-            </div>
-
-            <div class="analysis-item">
-              <strong>External Benchmarking:</strong>
-              <p>
-                Validated against {{ getRandomSources() }} independent sources
-                including industry reports, financial databases, and market
-                analysis platforms.
-              </p>
-            </div>
-
-            <div class="analysis-item">
-              <strong>Investment Reliability:</strong>
-              <p>{{ getRiskAssessment(selectedSource?.confidence) }}</p>
-            </div>
+          <div v-else class="empty-state">
+            <p>No risk assessment data available</p>
           </div>
         </div>
 
-        <!-- Action Buttons -->
-        <div class="action-section">
-          <button class="action-btn primary" @click="exportSource">
-            <i class="ri-download-line"></i>
-            Download Report
-          </button>
-          <button class="action-btn secondary" @click="flagForReview">
-            <i class="ri-flag-line"></i>
-            Flag for Review
-          </button>
+        <!-- MARKET ANALYSIS TAB -->
+        <div data-tab-pane v-show="activeTab === 'market'" class="tab-pane">
+          <h3>Market Analysis</h3>
+
+          <!-- Market Sizing -->
+          <div v-if="analysisData.marketOpportunity" class="market-sizing">
+            <h4>Market Sizing</h4>
+            <div class="sizing-grid">
+              <div class="sizing-card">
+                <div class="sizing-label">TAM</div>
+                <div class="sizing-value">
+                  {{ analysisData.marketOpportunity.TAM || "Not specified" }}
+                </div>
+                <div class="sizing-desc">Total Addressable Market</div>
+              </div>
+              <div class="sizing-card">
+                <div class="sizing-label">SAM</div>
+                <div class="sizing-value">
+                  {{ analysisData.marketOpportunity.SAM || "Not specified" }}
+                </div>
+                <div class="sizing-desc">Serviceable Addressable Market</div>
+              </div>
+              <div class="sizing-card">
+                <div class="sizing-label">SOM</div>
+                <div class="sizing-value">
+                  {{ analysisData.marketOpportunity.SOM || "Not specified" }}
+                </div>
+                <div class="sizing-desc">Serviceable Obtainable Market</div>
+              </div>
+              <div class="sizing-card">
+                <div class="sizing-label">Growth Rate</div>
+                <div class="sizing-value">
+                  {{
+                    analysisData.marketOpportunity.growthRate || "Not specified"
+                  }}
+                </div>
+                <div class="sizing-desc">CAGR / Market Growth</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Competitive Analysis -->
+          <div
+            v-if="
+              analysisData.competitiveAnalysis &&
+              analysisData.competitiveAnalysis.length > 0
+            "
+            class="competitive-section"
+          >
+            <h4>Competitive Landscape</h4>
+            <div class="competitors-grid">
+              <div
+                v-for="(comp, index) in analysisData.competitiveAnalysis"
+                :key="index"
+                class="competitor-card"
+              >
+                <h5>{{ comp.competitor }}</h5>
+                <div class="comp-detail">
+                  <strong>Differentiators:</strong>
+                  <p>{{ comp.differentiators }}</p>
+                </div>
+                <div class="comp-detail">
+                  <strong>Market Position:</strong>
+                  <p>{{ comp.marketShare || "Not specified" }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="empty-state">
+            <p>No competitive analysis data available</p>
+          </div>
+        </div>
+
+        <!-- FINANCIAL ANALYSIS TAB -->
+        <div data-tab-pane v-show="activeTab === 'financial'" class="tab-pane">
+          <h3>Financial Analysis</h3>
+
+          <!-- Add this section BEFORE the "limited financial data" message -->
+          <MarketBenchmarkChart :startup-name="analysisData.startupName" />
+
+          <!-- Financial Projections -->
+          <div
+            v-if="
+              analysisData.financialProjections &&
+              analysisData.financialProjections.length > 0
+            "
+            class="financial-section"
+          >
+            <h4>Revenue Projections</h4>
+            <div class="projections-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Year</th>
+                    <th>Revenue</th>
+                    <th>Expenses</th>
+                    <th>Margins</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(proj, index) in analysisData.financialProjections"
+                    :key="index"
+                  >
+                    <td>{{ proj.year }}</td>
+                    <td>{{ proj.revenue || "N/A" }}</td>
+                    <td>{{ proj.expenses || "N/A" }}</td>
+                    <td>{{ proj.margins || "N/A" }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Valuation Insights -->
+          <div
+            v-if="
+              analysisData.valuationInsights &&
+              Object.keys(analysisData.valuationInsights).length > 0
+            "
+            class="valuation-section"
+          >
+            <h4>Valuation Insights</h4>
+            <div class="valuation-grid">
+              <div
+                v-for="(value, key) in analysisData.valuationInsights"
+                :key="key"
+                class="valuation-card"
+              >
+                <strong>{{ formatLabel(key) }}</strong>
+                <p>{{ value || "Not specified" }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Investment Terms -->
+          <div
+            v-if="
+              analysisData.investmentTerms &&
+              Object.keys(analysisData.investmentTerms).length > 0
+            "
+            class="terms-section"
+          >
+            <h4>Investment Terms</h4>
+            <div class="terms-grid">
+              <div
+                v-for="(value, key) in analysisData.investmentTerms"
+                :key="key"
+                class="term-card"
+              >
+                <strong>{{ formatLabel(key) }}</strong>
+                <p>{{ value || "Not specified" }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-if="
+              !analysisData.financialProjections &&
+              !analysisData.valuationInsights &&
+              !analysisData.investmentTerms
+            "
+            class="empty-state"
+          >
+            <p>Limited financial data available in the provided documents</p>
+          </div>
+        </div>
+
+        <!-- TRACTION TAB -->
+        <div data-tab-pane v-show="activeTab === 'traction'" class="tab-pane">
+          <h3>Traction & Achievements</h3>
+          <div v-if="analysisData.traction" class="traction-section">
+            <div v-if="analysisData.traction.customers" class="traction-item">
+              <h4>Customers</h4>
+              <p>{{ analysisData.traction.customers }}</p>
+            </div>
+            <div v-if="analysisData.traction.revenue" class="traction-item">
+              <h4>Revenue</h4>
+              <p>{{ analysisData.traction.revenue }}</p>
+            </div>
+            <div v-if="analysisData.traction.users" class="traction-item">
+              <h4>Users</h4>
+              <p>{{ analysisData.traction.users }}</p>
+            </div>
+            <div
+              v-if="analysisData.traction.partnerships"
+              class="traction-item"
+            >
+              <h4>Partnerships</h4>
+              <p>{{ analysisData.traction.partnerships }}</p>
+            </div>
+            <div v-if="analysisData.traction.awards" class="traction-item">
+              <h4>Awards & Recognition</h4>
+              <p>{{ analysisData.traction.awards }}</p>
+            </div>
+          </div>
+          <div v-else class="empty-state">
+            <p>No traction data available</p>
+          </div>
         </div>
       </div>
 
-      <!-- Debug case when no source -->
-      <div v-else class="modal-content">
-        <p style="color: red; padding: 20px">
-          ⚠️ DEBUG: No selectedSource data available
-        </p>
+      <!-- Documents Analyzed -->
+      <div class="documents-section">
+        <h4>Documents Analyzed</h4>
+        <div class="documents-list">
+          <div
+            v-for="(doc, index) in analysisData.documentsAnalyzed"
+            :key="index"
+            class="doc-item"
+          >
+            <i class="ri-file-pdf-line"></i>
+            <div class="doc-info">
+              <strong>{{ doc.name }}</strong>
+              <span class="doc-meta"
+                >{{ doc.type }} • {{ doc.pages }} pages</span
+              >
+            </div>
+          </div>
+        </div>
       </div>
     </div>
+
+    <!-- Source Verification Modal -->
+    <div
+      v-if="showSourceModal"
+      class="modal-overlay"
+      @click.self="showSourceModal = false"
+    >
+      <div class="modal-content">
+        <button class="modal-close" @click="showSourceModal = false">
+          <i class="ri-close-line"></i>
+        </button>
+
+        <div class="modal-header">
+          <i class="ri-verified-badge-line"></i>
+          <h3>Source Verification</h3>
+        </div>
+
+        <div v-if="selectedSource" class="modal-body">
+          <div class="source-item">
+            <strong>Metric:</strong>
+            <p>{{ selectedMetric?.label }}</p>
+          </div>
+
+          <div class="source-item">
+            <strong>Source Document:</strong>
+            <p>{{ selectedSource.location }}</p>
+          </div>
+
+          <div class="source-item">
+            <strong>Extraction Method:</strong>
+            <p>{{ selectedSource.details }}</p>
+          </div>
+
+          <div class="source-item">
+            <strong>Confidence Level:</strong>
+            <div
+              class="confidence-indicator"
+              :class="selectedSource.confidence"
+            >
+              {{ selectedSource.confidence.toUpperCase() }} ({{
+                getConfidencePercentage(selectedSource.confidence)
+              }}%)
+            </div>
+          </div>
+
+          <div class="source-item">
+            <strong>AI Analysis Details:</strong>
+            <p>
+              Data extracted using
+              {{ analysisData.analysisMetadata?.aiModel || "Gemini AI" }} with
+              document analysis capabilities
+            </p>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn secondary" @click="showSourceModal = false">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- No Data State -->
+  <div v-else class="no-data">
+    <p>
+      No analysis data available. Please upload and analyze a document first.
+    </p>
+    <router-link to="/app/new-analysis" class="btn primary">
+      Start New Analysis
+    </router-link>
   </div>
 </template>
 
@@ -459,1461 +460,1099 @@
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAnalysisStore } from "@/stores/analysisStore";
-import MarketBenchmarkChart from "@/components/Molecules/MarketBenchmarkChart.vue";
-import MetricCard from "@/components/Molecules/MetricCard.vue";
+import MarketBenchmarkChart from "../components/Molecules/MarketBenchmarkChart.vue";
 
 const router = useRouter();
 const analysisStore = useAnalysisStore();
 
 const analysisData = computed(() => analysisStore.analysisResult);
+
 const activeTab = ref("summary");
-
-interface SourceInfo {
-  type: string;
-  location: string;
-  confidence: string;
-  details: string;
-}
-
 const showSourceModal = ref(false);
-const selectedSource = ref<SourceInfo | null>(null);
+const selectedSource = ref<any>(null);
+const selectedMetric = ref<any>(null);
 
-const tabs = ref([
+const tabs = [
   { id: "summary", name: "Executive Summary", icon: "ri-file-text-line" },
   { id: "risk", name: "Investment Risks", icon: "ri-flag-line" },
-  { id: "market", name: "Market Analysis", icon: "ri-bar-chart-line" },
-]);
-
-// Computed properties
-const isMultiDocumentAnalysis = computed(() => {
-  return (
-    (analysisData.value?.documentsAnalyzed?.length ?? 0) > 1 ||
-    (analysisData.value?.crossDocumentInsights?.length ?? 0) > 0
-  );
-});
+  { id: "market", name: "Market Analysis", icon: "ri-bar-chart-box-line" },
+  {
+    id: "financial",
+    name: "Financial Analysis",
+    icon: "ri-money-dollar-circle-line",
+  },
+  { id: "traction", name: "Traction", icon: "ri-rocket-line" },
+];
 
 onMounted(() => {
   if (!analysisData.value) {
-    console.warn("No analysis result found in store. Redirecting to home.");
+    console.warn("No analysis data found");
     setTimeout(() => {
       router.push("/app/new-analysis");
     }, 2000);
   }
 });
 
-// 🔥 MAIN CLICK HANDLER
-function handleMetricClick(metric: any) {
-  console.log("🎯 Metric clicked:", metric.label);
-  console.log("📊 Metric source:", metric.source);
-
-  // Set the selected source for the modal
-  selectedSource.value = {
-    type: metric.source?.type || "document",
-    location:
-      metric.source?.location || `${metric.label} - Financial documents`,
-    confidence: metric.source?.confidence || "High",
-    details:
-      metric.source?.details ||
-      `Financial data for "${metric.label}" extracted and validated from investment documents. This metric was analyzed using advanced AI processing with cross-document verification for maximum investment reliability.`,
-  };
-
-  // Show the modal
-  showSourceModal.value = true;
-  console.log("🔍 Modal should now be visible:", showSourceModal.value);
-}
-
-// Basic Methods
-function getConfidenceClass(): string {
+function getConfidenceClass() {
   const score = analysisData.value?.recommendation?.score || 0;
-  if (score >= 85) return "high";
-  if (score >= 70) return "medium";
+  if (score >= 75) return "high";
+  if (score >= 50) return "medium";
   return "low";
 }
 
-function getConfidenceLevel(): string {
+function getConfidenceLevel() {
   const score = analysisData.value?.recommendation?.score || 0;
-  if (score >= 85) return "High";
-  if (score >= 70) return "Medium";
-  return "Low";
+  if (score >= 75) return "HIGH";
+  if (score >= 50) return "MEDIUM";
+  return "LOW";
 }
 
-function getDocumentIcon(type: string): string {
-  const icons = {
-    pitchDeck: "ri-presentation-fill",
-    financialModel: "ri-line-chart-fill",
-    founderProfiles: "ri-team-fill",
-    marketResearch: "ri-bar-chart-box-fill",
-    tractionData: "ri-rocket-fill",
-    transcript: "ri-mic-fill",
-    founderUpdates: "ri-mail-fill",
-    teamCVs: "ri-team-fill",
+function getMetricContext(label: string): string {
+  const contexts: Record<string, string> = {
+    "AI Projects Fail":
+      "Industry benchmark showing adoption challenges in AI implementations",
+    "Expected revenues in FY 25-26":
+      "Company's projected near-term revenue target",
+    "Time to Insights (With Sia)":
+      "Processing time compared to conventional systems (3-4 days)",
+    "Volume of Data Processed (With Sia)":
+      "10x improvement over conventional data processing",
   };
-  return icons[type as keyof typeof icons] || "ri-file-fill";
+  return contexts[label] || "Metric extracted from startup documentation";
 }
 
-function getDocumentTypeName(type: string): string {
-  const names = {
-    pitchDeck: "Pitch Deck",
-    financialModel: "Financial Projections",
-    founderProfiles: "Founder & Team Profiles",
-    marketResearch: "Market Research & Analysis",
-    tractionData: "Traction & Growth Metrics",
-    transcript: "Call Transcript",
-    founderUpdates: "Founder Updates",
-    teamCVs: "Team CVs",
+function formatRiskType(type: string): string {
+  const types: Record<string, string> = {
+    "market-risk": "Market Risk",
+    "execution-risk": "Execution Risk",
+    "financial-risk": "Financial Risk",
+    "technical-risk": "Technical Risk",
   };
-  return names[type as keyof typeof names] || type;
+  return types[type] || type;
 }
 
-// 🔥 METRIC CARD FUNCTIONS
-function getMetricIcon(label: string): string {
-  const labelLower = label.toLowerCase();
-
-  if (
-    labelLower.includes("growth rate") ||
-    (labelLower.includes("growth") && labelLower.includes("rate"))
-  ) {
-    return "ri-trending-up-line";
-  }
-  if (labelLower.includes("revenue")) {
-    return "ri-money-dollar-circle-line";
-  }
-  if (labelLower.includes("team") || labelLower.includes("size")) {
-    return "ri-team-line";
-  }
-  if (labelLower.includes("funding") || labelLower.includes("burn")) {
-    return "ri-funds-line";
-  }
-  if (labelLower.includes("market")) {
-    return "ri-global-line";
-  }
-  if (labelLower.includes("score") || labelLower.includes("confidence")) {
-    return "ri-star-line";
-  }
-  return "ri-line-chart-line";
+function formatLabel(text: string): string {
+  return text
+    .replace(/([A-Z])/g, " $1")
+    .replace(/_/g, " ")
+    .trim()
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
-function getMetricIconColor(label: string): string {
-  const labelLower = label.toLowerCase();
-  if (labelLower.includes("revenue") || labelLower.includes("growth")) {
-    return "#22c55e"; // Green for positive metrics
-  }
-  if (labelLower.includes("burn") || labelLower.includes("risk")) {
-    return "#ef4444"; // Red for concerning metrics
-  }
-  if (labelLower.includes("team") || labelLower.includes("funding")) {
-    return "#f59e0b"; // Orange for neutral metrics
-  }
-  return "#00d4ff"; // Default accent color
+function getConfidencePercentage(level: string): number {
+  const map: Record<string, number> = { high: 90, medium: 70, low: 50 };
+  return map[level] || 50;
 }
 
-function getMetricTrend(label: string): any {
-  const labelLower = label.toLowerCase();
-
-  if (labelLower.includes("growth") || labelLower.includes("revenue")) {
-    return {
-      direction: "up" as const,
-      value: Math.floor(Math.random() * 50) + 150,
-      period: "YoY",
-    };
-  }
-
-  if (labelLower.includes("burn")) {
-    return {
-      direction: "down" as const,
-      value: Math.floor(Math.random() * 15) + 10,
-      period: "QoQ",
-    };
-  }
-
-  if (labelLower.includes("team") || labelLower.includes("funding")) {
-    return {
-      direction: "up" as const,
-      value: Math.floor(Math.random() * 30) + 20,
-      period: "this quarter",
-    };
-  }
-
-  return {
-    direction: "stable" as const,
-    value: Math.floor(Math.random() * 10) + 5,
-    period: "QoQ",
-  };
+function openSourceModal(metric: any) {
+  selectedMetric.value = metric;
+  selectedSource.value = metric.source;
+  showSourceModal.value = true;
 }
 
-function getChartType(label: string): "progress" | "trend" | "gauge" {
-  if (
-    label.toLowerCase().includes("growth") ||
-    label.toLowerCase().includes("rate")
-  ) {
-    return "trend";
-  }
-  if (
-    label.toLowerCase().includes("score") ||
-    label.toLowerCase().includes("confidence")
-  ) {
-    return "gauge";
-  }
-  return "progress";
-}
-
-function getChartValue(metric: any): number {
-  const value = metric.value.toString().replace(/[^0-9.]/g, "");
-  const numValue = parseFloat(value);
-
-  if (isNaN(numValue)) return 50;
-
-  if (metric.label.toLowerCase().includes("growth rate")) {
-    return Math.min(100, numValue / 2);
-  }
-  if (metric.label.toLowerCase().includes("score")) {
-    return numValue;
-  }
-  if (
-    metric.label.toLowerCase().includes("size") ||
-    metric.label.toLowerCase().includes("team")
-  ) {
-    return Math.min(100, numValue * 8);
-  }
-
-  return Math.min(100, numValue * 10);
-}
-
-function getTrendData(label: string): number[] {
-  const trendPatterns = {
-    revenue: [10, 15, 25, 35, 45, 60, 75, 85],
-    growth: [5, 12, 8, 25, 18, 35, 28, 42],
-    funding: [0, 0, 20, 20, 50, 50, 50, 50],
-    team: [3, 5, 7, 8, 10, 12, 12, 12],
-    burn: [20, 25, 30, 40, 50, 65, 80, 85],
-    market: [15, 20, 25, 30, 40, 50, 60, 75],
-  };
-
-  const key = Object.keys(trendPatterns).find((k) =>
-    label.toLowerCase().includes(k)
-  );
-
-  return (
-    trendPatterns[key as keyof typeof trendPatterns] || [
-      10, 25, 15, 35, 28, 42, 38, 50,
-    ]
-  );
-}
-
-function getMetricChange(label: string): string {
-  const changes = {
-    revenue: "+250% YoY",
-    growth: "+180% QoQ",
-    funding: "Last Round +$500K",
-    team: "+4 this quarter",
-    burn: "Optimized -15%",
-    market: "Expanding +40%",
-  };
-
-  const key = Object.keys(changes).find((k) => label.toLowerCase().includes(k));
-  return changes[key as keyof typeof changes] || "+12% QoQ";
-}
-
-// Icon and Status Functions
-function getInsightIcon(type: string): string {
-  const icons = {
-    "financial-validation": "ri-calculator-line",
-    "team-validation": "ri-team-line",
-    "founder-sentiment": "ri-emotion-line",
-    "market-validation": "ri-line-chart-line",
-    "financial-health": "ri-heart-pulse-line",
-  };
-  return icons[type as keyof typeof icons] || "ri-lightbulb-line";
-}
-
-function getStatusIcon(status: string): string {
-  const icons = {
-    validated: "ri-check-line",
-    verified: "ri-shield-check-line",
-    consistent: "ri-check-double-line",
-    strong: "ri-trending-up-line",
-    stable: "ri-bar-chart-line",
-    "highly-confident": "ri-star-line",
-    "moderately-confident": "ri-thumb-up-line",
-  };
-  return icons[status as keyof typeof icons] || "ri-information-line";
-}
-
-function getRiskIcon(level: string): string {
-  const icons = {
-    high: "ri-error-warning-line",
-    medium: "ri-alert-line",
-    low: "ri-information-line",
-  };
-  return icons[level as keyof typeof icons] || "ri-flag-line";
-}
-
-function getTabBadge(tabId: string): string | null {
-  if (tabId === "risk" && analysisData.value?.riskAssessment) {
-    return analysisData.value.riskAssessment.length.toString();
-  }
-  return null;
-}
-
-// Modal Functions
-// function showSource(sourceInfo: any) {
-//   selectedSource.value = sourceInfo;
-//   showSourceModal.value = true;
+// async function handleExportPDF() {
+//   try {
+//     await analysisStore.exportReport();
+//     alert("Report exported successfully!");
+//   } catch (error: any) {
+//     alert(`Export failed: ${error.message}`);
+//   }
 // }
+async function handlePrintReport() {
+  try {
+    // Get all tab panes
+    const tabPanes = document.querySelectorAll("[data-tab-pane]");
 
-function closeSourceModal() {
-  showSourceModal.value = false;
-  selectedSource.value = null;
-}
+    // Store original display states
+    const originalStates = Array.from(tabPanes).map((pane) => ({
+      element: pane as HTMLElement,
+      originalDisplay: (pane as HTMLElement).style.display,
+      originalVisibility: (pane as HTMLElement).style.visibility,
+    }));
 
-function getConfidenceScore(confidence: string): number {
-  switch (confidence?.toLowerCase()) {
-    case "high":
-      return Math.floor(Math.random() * 10) + 90;
-    case "medium":
-      return Math.floor(Math.random() * 20) + 70;
-    case "low":
-      return Math.floor(Math.random() * 20) + 50;
-    default:
-      return 75;
+    // Show all tabs temporarily
+    tabPanes.forEach((pane) => {
+      const el = pane as HTMLElement;
+      el.style.display = "block";
+      el.style.visibility = "visible";
+    });
+
+    // Add print styles temporarily
+    const style = document.createElement("style");
+    style.textContent = `
+      @media print {
+        .tabs-navigation { display: none; }
+        .export-btn { display: none; }
+        .action-buttons { display: none; }
+        [data-tab-pane] {
+          page-break-inside: avoid;
+          page-break-after: always;
+          display: block !important;
+          visibility: visible !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Wait a moment for DOM to update
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Open print dialog
+    window.print();
+
+    // Restore original states
+    setTimeout(() => {
+      originalStates.forEach(
+        ({ element, originalDisplay, originalVisibility }) => {
+          element.style.display = originalDisplay;
+          element.style.visibility = originalVisibility;
+        }
+      );
+      document.head.removeChild(style);
+    }, 500);
+  } catch (error) {
+    console.error("Print failed:", error);
   }
-}
-
-function getRandomSources(): string {
-  const sources = ["3", "5", "7", "12"];
-  return sources[Math.floor(Math.random() * sources.length)];
-}
-
-function getRiskAssessment(confidence: string): string {
-  switch (confidence?.toLowerCase()) {
-    case "high":
-      return "High investment reliability - Data extracted from verified due diligence documents with strong cross-validation.";
-    case "medium":
-      return "Moderate investment reliability - Financial data validated across available documents with industry benchmarking.";
-    case "low":
-      return "Lower investment reliability - Estimated projections requiring additional due diligence and validation.";
-    default:
-      return "Investment reliability assessment requires manual review and validation.";
-  }
-}
-
-function exportSource() {
-  alert(
-    "Investment analysis report would be downloaded in a real implementation"
-  );
-}
-
-function flagForReview() {
-  alert("Data point flagged for investment committee review");
-  closeSourceModal();
 }
 </script>
 
 <style lang="scss" scoped>
-@import "@/styles/variables.scss";
-
-$color-accent: #00d4ff;
-$color-accent-darker: #00a2ff;
-$color-success: #22c55e;
-$color-warning: #f59e0b;
-$color-error: #ef4444;
-
-// 🧪 DEBUG BUTTON (remove after testing)
-.debug-btn {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  background: #ff0000;
-  color: white;
-  padding: 10px 15px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: bold;
-  z-index: 1000;
-
-  &:hover {
-    background: #cc0000;
-  }
-}
-
-// Base styles
-@font-face {
-  font-family: "AlibabaSans-Regular";
-  src: url("https://assets-persist.lovart.ai/agent-static-assets/AlibabaSans-Regular.otf")
-    format("opentype");
-}
-@font-face {
-  font-family: "AlibabaSans-Medium";
-  src: url("https://assets-persist.lovart.ai/agent-static-assets/AlibabaSans-Medium.otf")
-    format("opentype");
-  font-weight: 500;
-}
-@font-face {
-  font-family: "AlibabaSans-Bold";
-  src: url("https://assets-persist.lovart.ai/agent-static-assets/Alibaba-PuHuiTi-Bold.otf")
-    format("opentype");
-  font-weight: bold;
-}
-
 .page-wrapper {
-  font-family: "AlibabaSans-Regular", sans-serif;
-  background-color: #121621;
-  color: #e6e8ec;
-  padding: 40px;
-  display: flex;
-  justify-content: center;
   min-height: 100vh;
+  background: linear-gradient(135deg, #0f1929 0%, #1a2332 100%);
+  padding: 40px 20px;
 }
 
 .container {
-  width: 100%;
-  max-width: 1200px;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .header {
-  margin-bottom: 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 40px;
+  gap: 20px;
 
   .header-main {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 8px;
-  }
+    flex: 1;
 
-  h1 {
-    font-family: "AlibabaSans-Bold", sans-serif;
-    font-size: 36px;
-    color: #ffffff;
-    margin: 0;
-  }
-
-  h2 {
-    font-family: "AlibabaSans-Medium", sans-serif;
-    font-size: 18px;
-    color: #8b93a7;
-    font-weight: 500;
-    margin: 0;
-  }
-}
-
-// Analysis badges
-.analysis-badges {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.analysis-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-
-  &.multi-doc {
-    background: rgba($color-accent, 0.1);
-    color: $color-accent;
-    border: 1px solid rgba($color-accent, 0.3);
-  }
-
-  &.confidence {
-    &.high {
-      background: rgba($color-success, 0.1);
-      color: $color-success;
-      border: 1px solid rgba($color-success, 0.3);
-    }
-
-    &.medium {
-      background: rgba($color-warning, 0.1);
-      color: $color-warning;
-      border: 1px solid rgba($color-warning, 0.3);
-    }
-
-    &.low {
-      background: rgba($color-error, 0.1);
-      color: $color-error;
-      border: 1px solid rgba($color-error, 0.3);
+    h1 {
+      font-size: 2.2em;
+      color: #ffffff;
+      margin-bottom: 12px;
+      font-weight: 600;
     }
   }
-}
 
-// Document chips
-.documents-analyzed {
-  margin-top: 20px;
-
-  h3 {
+  .export-btn {
+    padding: 12px 24px;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 16px;
-    color: #ffffff;
-    margin-bottom: 12px;
 
-    i {
-      color: $color-accent;
+    &.primary {
+      background: linear-gradient(135deg, #00d4ff, #0099ff);
+      color: white;
+
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0, 212, 255, 0.3);
+      }
     }
   }
 }
 
-.document-chips {
+.analysis-badges {
   display: flex;
+  gap: 12px;
   flex-wrap: wrap;
-  gap: 8px;
-}
 
-.document-chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.8);
-
-  i {
-    color: $color-accent;
-    font-size: 14px;
-  }
-}
-
-.chip-status {
-  display: flex;
-  align-items: center;
-
-  i {
-    color: $color-success !important;
-    font-size: 12px;
-  }
-}
-
-.recommendation-card {
-  background: linear-gradient(
-    145deg,
-    rgba(28, 36, 54, 0.8),
-    rgba(20, 26, 40, 0.9)
-  );
-  border-radius: 16px;
-  padding: 40px;
-  margin-bottom: 30px;
-  position: relative;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba($color-accent, 0.2);
-  box-shadow:
-    0 0 30px rgba($color-accent, 0.1),
-    inset 0 0 20px rgba($color-accent, 0.05);
-  overflow: hidden;
-
-  &::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(
-      90deg,
-      rgba($color-accent, 0),
-      rgba($color-accent, 0.8),
-      rgba($color-accent, 0)
-    );
-  }
-}
-
-.recommendation-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.recommendation-label {
-  font-family: "AlibabaSans-Medium", sans-serif;
-  font-size: 16px;
-  color: #8b93a7;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-}
-
-.analysis-depth {
-  font-size: 12px;
-  color: $color-accent;
-  background: rgba($color-accent, 0.1);
-  padding: 4px 8px;
-  border-radius: 12px;
-  border: 1px solid rgba($color-accent, 0.3);
-}
-
-.recommendation-verdict {
-  font-family: "AlibabaSans-Bold", sans-serif;
-  font-size: 48px;
-  color: $color-accent;
-  margin-bottom: 15px;
-  text-shadow: 0 0 15px rgba($color-accent, 0.4);
-}
-
-.confidence-score {
-  display: flex;
-  align-items: center;
-  margin-bottom: 25px;
-  gap: 15px;
-}
-
-.score-value {
-  font-family: "AlibabaSans-Bold", sans-serif;
-  font-size: 28px;
-  color: #ffffff;
-}
-
-.progress-container {
-  flex-grow: 1;
-  height: 8px;
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  position: relative;
-  overflow: hidden;
-  max-width: 300px;
-}
-
-.progress-bar {
-  height: 100%;
-  background: linear-gradient(90deg, $color-accent-darker, $color-accent);
-  border-radius: 4px;
-  box-shadow: 0 0 10px rgba($color-accent, 0.7);
-  transition: width 0.5s ease-out;
-}
-
-.confidence-boost {
-  font-size: 12px;
-  color: $color-success;
-  background: rgba($color-success, 0.1);
-  padding: 4px 8px;
-  border-radius: 8px;
-  border: 1px solid rgba($color-success, 0.3);
-}
-
-.justification {
-  font-size: 16px;
-  line-height: 1.6;
-  color: #b0b7c3;
-  max-width: 800px;
-}
-
-// Cross-document insights
-.cross-insights-section {
-  margin: 30px 0;
-
-  h3 {
-    display: flex;
+  .analysis-badge {
+    display: inline-flex;
     align-items: center;
-    gap: 10px;
-    font-size: 20px;
-    color: #ffffff;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 0.9em;
+    font-weight: 500;
+
+    &.confidence {
+      background: rgba(0, 212, 255, 0.1);
+      color: #00d4ff;
+      border: 1px solid rgba(0, 212, 255, 0.3);
+
+      &.high {
+        background: rgba(34, 197, 94, 0.1);
+        color: #22c55e;
+        border-color: rgba(34, 197, 94, 0.3);
+      }
+    }
+  }
+}
+
+.recommendation-box {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 212, 255, 0.1),
+    rgba(0, 153, 255, 0.05)
+  );
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 12px;
+  padding: 30px;
+  margin-bottom: 40px;
+
+  .recommendation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 20px;
 
+    .label {
+      font-size: 0.85em;
+      color: rgba(255, 255, 255, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 600;
+    }
+
+    .badge {
+      background: rgba(34, 197, 94, 0.2);
+      color: #22c55e;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.85em;
+      font-weight: 500;
+
+      &.complete {
+        background: rgba(34, 197, 94, 0.2);
+      }
+    }
+  }
+
+  .recommendation-text {
+    font-size: 2em;
+    color: #00d4ff;
+    margin-bottom: 20px;
+    font-weight: 700;
+  }
+
+  .recommendation-score {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+
+    .score-label {
+      color: rgba(255, 255, 255, 0.7);
+      font-weight: 500;
+    }
+
+    .score-bar {
+      flex: 1;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+
+      .score-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #00d4ff, #0099ff);
+        transition: width 0.5s ease;
+      }
+    }
+
+    .score-value {
+      color: #00d4ff;
+      font-weight: 700;
+      font-size: 1.1em;
+      min-width: 60px;
+    }
+  }
+
+  .recommendation-justification {
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.6;
+    font-size: 1em;
+  }
+}
+
+.tabs-navigation {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 40px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  overflow-x: auto;
+  padding-bottom: 0;
+
+  .tab-btn {
+    padding: 16px 20px;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s ease;
+
     i {
-      color: $color-accent;
+      font-size: 1.1em;
+    }
+
+    .tab-count {
+      background: rgba(0, 212, 255, 0.2);
+      color: #00d4ff;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.85em;
+      margin-left: 4px;
+    }
+
+    &:hover {
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    &.active {
+      color: #00d4ff;
+      border-bottom-color: #00d4ff;
     }
   }
 }
 
-.insights-grid {
-  display: grid;
-  gap: 16px;
+.tab-content {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 40px;
+  margin-bottom: 40px;
 }
 
-.insight-card {
+.tab-pane {
+  animation: fadeIn 0.3s ease;
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  h3 {
+    font-size: 1.5em;
+    color: #ffffff;
+    margin-bottom: 24px;
+    font-weight: 600;
+  }
+
+  h4 {
+    font-size: 1.2em;
+    color: #ffffff;
+    margin-bottom: 16px;
+    margin-top: 24px;
+    font-weight: 600;
+
+    &:first-child {
+      margin-top: 0;
+    }
+  }
+}
+
+.summary-section {
+  margin-bottom: 32px;
+
+  h3 {
+    font-size: 1.2em;
+    color: #00d4ff;
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+
+  p {
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.7;
+    font-size: 1em;
+  }
+}
+
+.metrics-section {
+  margin-top: 40px;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.metric-card {
   background: rgba(255, 255, 255, 0.03);
-  border-radius: 12px;
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 10px;
   padding: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
   transition: all 0.3s ease;
 
   &:hover {
-    border-color: rgba($color-accent, 0.3);
-    background: rgba($color-accent, 0.02);
+    background: rgba(0, 212, 255, 0.08);
+    border-color: rgba(0, 212, 255, 0.4);
   }
 
-  &.validated,
-  &.verified,
-  &.consistent,
-  &.strong {
-    border-left: 4px solid $color-success;
-  }
+  .metric-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
 
-  &.positive,
-  &.highly-confident {
-    border-left: 4px solid $color-accent;
-  }
-}
-
-.insight-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.insight-icon {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-
-  &.financial-validation,
-  &.financial-health {
-    background: rgba($color-success, 0.1);
-    color: $color-success;
-  }
-
-  &.team-validation {
-    background: rgba($color-accent, 0.1);
-    color: $color-accent;
-  }
-
-  &.founder-sentiment,
-  &.market-validation {
-    background: rgba($color-warning, 0.1);
-    color: $color-warning;
-  }
-}
-
-.insight-meta {
-  flex: 1;
-
-  h4 {
-    font-size: 14px;
-    color: #ffffff;
-    margin-bottom: 4px;
-  }
-
-  .insight-confidence {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.6);
-    text-transform: uppercase;
-  }
-}
-
-.insight-status {
-  &.validated,
-  &.verified,
-  &.consistent,
-  &.strong {
-    color: $color-success;
-  }
-
-  &.positive,
-  &.highly-confident {
-    color: $color-accent;
-  }
-}
-
-.insight-description {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 14px;
-  line-height: 1.5;
-  margin-bottom: 12px;
-}
-
-.insight-source {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
-
-  i {
-    color: $color-accent;
-  }
-}
-
-.tabs {
-  display: flex;
-  margin-bottom: 30px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.tab {
-  padding: 15px 25px;
-  font-family: "AlibabaSans-Medium", sans-serif;
-  font-size: 16px;
-  color: #8b93a7;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  position: relative;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-
-  i {
-    margin-right: 8px;
-    font-size: 18px;
-  }
-
-  &.active {
-    color: $color-accent;
-    border-bottom-color: $color-accent;
-    text-shadow: 0 0 8px rgba($color-accent, 0.3);
-  }
-
-  &:hover:not(.active) {
-    color: #ffffff;
-  }
-}
-
-.tab-badge {
-  background: rgba($color-accent, 0.2);
-  color: $color-accent;
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 10px;
-  margin-left: 6px;
-}
-
-.content-section {
-  background: linear-gradient(
-    145deg,
-    rgba(28, 36, 54, 0.6),
-    rgba(20, 26, 40, 0.7)
-  );
-  border-radius: 12px;
-  padding: 30px;
-  margin-bottom: 20px;
-  border: 1px solid rgba($color-accent, 0.1);
-
-  .section-title {
-    font-family: "AlibabaSans-Bold", sans-serif;
-    font-size: 20px;
-    color: #ffffff;
-    margin-bottom: 20px;
-  }
-
-  .section-content {
-    font-size: 16px;
-    line-height: 1.7;
-    color: #b0b7c3;
-
-    :deep(p) {
-      margin-bottom: 15px;
-    }
-
-    :deep(strong) {
+    h4 {
+      margin: 0;
       color: #ffffff;
-      font-family: "AlibabaSans-Medium", sans-serif;
+      font-size: 0.95em;
+      font-weight: 600;
+      flex: 1;
+    }
+
+    .confidence-badge {
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75em;
+      font-weight: 600;
+      text-transform: uppercase;
+      white-space: nowrap;
+      margin-left: 8px;
+
+      &.high {
+        background: rgba(34, 197, 94, 0.2);
+        color: #22c55e;
+      }
+
+      &.medium {
+        background: rgba(234, 179, 8, 0.2);
+        color: #eab308;
+      }
+
+      &.low {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+      }
+    }
+  }
+
+  .metric-value {
+    font-size: 1.8em;
+    color: #00d4ff;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .metric-context {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.9em;
+    margin-bottom: 12px;
+    line-height: 1.4;
+  }
+
+  .verify-btn {
+    width: 100%;
+    padding: 8px 12px;
+    background: rgba(0, 212, 255, 0.1);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    color: #00d4ff;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+
+    &:hover {
+      background: rgba(0, 212, 255, 0.2);
+      border-color: rgba(0, 212, 255, 0.5);
     }
   }
 }
 
-// Risk section
-.risk-section {
-  .risk-grid {
-    display: grid;
-    gap: 16px;
-  }
+.risks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
 }
 
 .risk-card {
   background: rgba(255, 255, 255, 0.03);
-  border-radius: 12px;
+  border-left: 4px solid;
+  border-radius: 8px;
   padding: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
 
-  &.high {
-    border-left: 4px solid $color-error;
+  &.risk-high {
+    border-left-color: #ef4444;
+    background: rgba(239, 68, 68, 0.05);
   }
 
-  &.medium {
-    border-left: 4px solid $color-warning;
+  &.risk-medium {
+    border-left-color: #eab308;
+    background: rgba(234, 179, 8, 0.05);
   }
 
-  &.low {
-    border-left: 4px solid $color-success;
+  &.risk-low {
+    border-left-color: #22c55e;
+    background: rgba(34, 197, 94, 0.05);
   }
-}
 
-.risk-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  .risk-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+
+    .risk-type {
+      font-size: 0.9em;
+      color: rgba(255, 255, 255, 0.7);
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    .risk-level {
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 0.8em;
+      font-weight: 600;
+      text-transform: uppercase;
+
+      &.high {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+      }
+
+      &.medium {
+        background: rgba(234, 179, 8, 0.2);
+        color: #eab308;
+      }
+
+      &.low {
+        background: rgba(34, 197, 94, 0.2);
+        color: #22c55e;
+      }
+    }
+  }
 
   h4 {
+    margin: 0 0 12px 0;
     color: #ffffff;
-    font-size: 16px;
-  }
-}
-
-.risk-level {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 10px;
-  font-weight: 600;
-
-  &.high {
-    background: rgba($color-error, 0.1);
-    color: $color-error;
+    font-size: 1.1em;
+    font-weight: 600;
   }
 
-  &.medium {
-    background: rgba($color-warning, 0.1);
-    color: $color-warning;
+  .risk-description {
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 16px;
+    line-height: 1.5;
   }
 
-  &.low {
-    background: rgba($color-success, 0.1);
-    color: $color-success;
-  }
-}
+  .risk-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
 
-// Metrics
-.metrics-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin: 40px 0 20px 0;
+    .detail-item {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 12px;
+      border-radius: 6px;
 
-  h3 {
-    font-size: 24px;
-    color: #ffffff;
-    margin: 0;
-  }
-}
+      strong {
+        color: rgba(255, 255, 255, 0.9);
+        display: block;
+        margin-bottom: 6px;
+        font-size: 0.9em;
+      }
 
-.metrics-info {
-  display: flex;
-  gap: 16px;
-}
-
-.source-info-indicator,
-.processing-info {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: rgba($color-accent, 0.1);
-  border-radius: 16px;
-  border: 1px solid rgba($color-accent, 0.2);
-  font-size: 12px;
-  color: $color-accent;
-
-  i {
-    font-size: 14px;
-  }
-}
-
-.metrics-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 24px;
-}
-
-.clickable-metric {
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-
-  &:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 25px rgba($color-accent, 0.2);
-  }
-
-  &:active {
-    transform: translateY(-2px);
-  }
-
-  // 🔥 SUPER PROMINENT VERSION
-  &::after {
-    content: "🔍 VERIFY SOURCE";
-    position: absolute;
-    bottom: 16px;
-    right: 16px;
-    font-size: 13px; // Even bigger
-    font-weight: 700; // Even bolder
-    text-transform: uppercase; // All caps
-    letter-spacing: 0.5px; // Spaced out
-    color: $color-accent;
-    opacity: 1;
-    background: linear-gradient(
-      135deg,
-      rgba(0, 0, 0, 0.9),
-      rgba(0, 20, 40, 0.9)
-    );
-    padding: 8px 12px;
-    border-radius: 8px;
-    border: 1px solid $color-accent;
-    pointer-events: none;
-    transition: all 0.3s ease;
-    backdrop-filter: blur(6px);
-    box-shadow: 0 0 12px rgba($color-accent, 0.4);
-    animation: subtlePulse 3s ease-in-out infinite;
-  }
-
-  &:hover::after {
-    background: linear-gradient(
-      135deg,
-      $color-accent,
-      rgba($color-accent, 0.8)
-    );
-    color: #ffffff;
-    transform: scale(1.08);
-    box-shadow: 0 4px 16px rgba($color-accent, 0.6);
-  }
-}
-
-// ✅ SUBTLE PULSE ANIMATION
-@keyframes subtlePulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.8;
-  }
-}
-
-// Metadata section
-.metadata-section {
-  margin-top: 40px;
-  padding: 25px;
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-
-  h3 {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 18px;
-    color: #ffffff;
-    margin-bottom: 20px;
-
-    i {
-      color: $color-accent;
+      p {
+        color: rgba(255, 255, 255, 0.7);
+        margin: 0;
+        font-size: 0.9em;
+        line-height: 1.4;
+      }
     }
   }
 }
 
-.metadata-grid {
+.market-sizing {
+  margin-bottom: 40px;
+
+  h4 {
+    margin-bottom: 20px;
+  }
+}
+
+.sizing-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
 }
 
-.metadata-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px;
+.sizing-card {
+  background: rgba(0, 212, 255, 0.05);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+
+  .sizing-label {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.9em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .sizing-value {
+    color: #00d4ff;
+    font-size: 1.4em;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .sizing-desc {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.85em;
+  }
+}
+
+.competitive-section {
+  margin-top: 30px;
+}
+
+.competitors-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.competitor-card {
   background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px;
+
+  h5 {
+    color: #00d4ff;
+    margin: 0 0 12px 0;
+    font-size: 1em;
+    font-weight: 600;
+  }
+
+  .comp-detail {
+    margin-bottom: 12px;
+
+    strong {
+      color: rgba(255, 255, 255, 0.8);
+      display: block;
+      margin-bottom: 4px;
+      font-size: 0.9em;
+    }
+
+    p {
+      color: rgba(255, 255, 255, 0.6);
+      margin: 0;
+      font-size: 0.9em;
+      line-height: 1.4;
+    }
+  }
+}
+
+.financial-section {
+  margin-bottom: 30px;
+}
+
+.projections-table {
+  overflow-x: auto;
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+
+    thead {
+      background: rgba(0, 212, 255, 0.1);
+
+      th {
+        padding: 12px;
+        color: #00d4ff;
+        font-weight: 600;
+        text-align: left;
+        font-size: 0.95em;
+        border-bottom: 2px solid rgba(0, 212, 255, 0.2);
+      }
+    }
+
+    tbody {
+      tr {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+        &:hover {
+          background: rgba(0, 212, 255, 0.05);
+        }
+
+        td {
+          padding: 12px;
+          color: rgba(255, 255, 255, 0.8);
+          font-size: 0.95em;
+        }
+      }
+    }
+  }
+}
+
+.valuation-section {
+  margin-top: 30px;
+}
+
+.valuation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.valuation-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px;
+
+  strong {
+    color: rgba(255, 255, 255, 0.9);
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.95em;
+  }
+
+  p {
+    color: rgba(255, 255, 255, 0.7);
+    margin: 0;
+    font-size: 0.9em;
+    line-height: 1.4;
+  }
+}
+
+.terms-section {
+  margin-top: 30px;
+}
+
+.terms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.term-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 16px;
+
+  strong {
+    color: rgba(255, 255, 255, 0.9);
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.95em;
+  }
+
+  p {
+    color: rgba(255, 255, 255, 0.7);
+    margin: 0;
+    font-size: 0.9em;
+  }
+}
+
+.traction-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+
+  .traction-item {
+    background: rgba(34, 197, 94, 0.05);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    border-radius: 8px;
+    padding: 16px;
+
+    h4 {
+      margin: 0 0 12px 0;
+      color: #22c55e;
+      font-size: 1em;
+      font-weight: 600;
+    }
+
+    p {
+      color: rgba(255, 255, 255, 0.8);
+      margin: 0;
+      line-height: 1.5;
+    }
+  }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 1em;
+}
+
+.documents-section {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 40px;
+
+  h4 {
+    color: #ffffff;
+    margin: 0 0 16px 0;
+    font-size: 1.1em;
+    font-weight: 600;
+  }
+}
+
+.documents-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.doc-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(0, 212, 255, 0.05);
+  border: 1px solid rgba(0, 212, 255, 0.1);
   border-radius: 8px;
 
-  .metadata-label {
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 14px;
+  i {
+    color: #00d4ff;
+    font-size: 1.5em;
   }
 
-  .metadata-value {
-    color: #ffffff;
-    font-weight: 500;
-    text-transform: capitalize;
+  .doc-info {
+    flex: 1;
+
+    strong {
+      color: #ffffff;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .doc-meta {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 0.85em;
+    }
   }
 }
 
-.loading-text {
-  text-align: center;
-  color: #8b93a7;
-}
-
-// Modal styles
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
-  backdrop-filter: blur(8px);
-  animation: modalFadeIn 0.3s ease-out;
+  z-index: 1000;
+  padding: 20px;
 }
 
-@keyframes modalFadeIn {
-  from {
-    opacity: 0;
-    backdrop-filter: blur(0px);
-  }
-  to {
-    opacity: 1;
-    backdrop-filter: blur(8px);
-  }
-}
-
-.source-modal {
-  background: linear-gradient(145deg, #0f1419, #1a202c);
-  border: 1px solid rgba($color-accent, 0.3);
-  border-radius: 20px;
-  width: 95%;
-  max-width: 700px;
-  max-height: 85vh;
+.modal-content {
+  background: #1a2332;
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 12px;
+  max-width: 500px;
+  width: 100%;
+  max-height: 80vh;
   overflow-y: auto;
-  box-shadow:
-    0 25px 80px rgba(0, 0, 0, 0.6),
-    0 0 50px rgba($color-accent, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  animation: modalSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
 }
 
-@keyframes modalSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(50px) scale(0.9);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 1.5em;
+  cursor: pointer;
+  transition: color 0.3s ease;
+
+  &:hover {
+    color: #ffffff;
   }
 }
 
 .modal-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 28px 32px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(90deg, rgba($color-accent, 0.05), transparent);
-}
-
-.header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.verification-status {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  color: #4ade80;
-
-  span {
-    text-transform: uppercase;
-    font-weight: 600;
-    letter-spacing: 1px;
-  }
-}
-
-.status-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-
-  &.verified {
-    background: #4ade80;
-    box-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
-    animation: pulse 2s infinite;
-  }
-
-  &.complete {
-    background: #f59e0b;
-    box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
-  }
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.7;
-    transform: scale(1.1);
-  }
-}
-
-.modal-header h3 {
-  color: #ffffff;
-  margin: 0;
-  font-size: 26px;
-  font-family: "AlibabaSans-Bold", sans-serif;
+  gap: 12px;
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.1);
 
   i {
-    color: $color-accent;
-    margin-right: 12px;
-  }
-}
-
-.verification-badge {
-  padding: 6px 14px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-
-  &.verified {
-    background: rgba(34, 197, 94, 0.2);
-    color: rgb(34, 197, 94);
-    border: 1px solid rgba(34, 197, 94, 0.3);
-  }
-}
-
-.source-section,
-.analysis-section,
-.action-section {
-  padding: 28px 32px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  margin-bottom: 24px;
-
-  i {
-    color: $color-accent;
-    font-size: 20px;
+    color: #22c55e;
+    font-size: 1.5em;
   }
 
-  span {
-    font-family: "AlibabaSans-Bold", sans-serif;
-    font-size: 18px;
+  h3 {
+    margin: 0;
     color: #ffffff;
-  }
-}
-
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-left: auto;
-
-  span {
-    font-size: 14px;
-    color: #f59e0b;
-    font-family: "AlibabaSans-Medium", sans-serif;
+    font-size: 1.2em;
     font-weight: 600;
   }
 }
 
-.source-details-grid {
-  display: grid;
-  gap: 24px;
-}
+.modal-body {
+  padding: 24px;
 
-.detail-item {
-  .detail-label {
-    font-size: 13px;
-    color: #8b93a7;
-    text-transform: uppercase;
-    font-weight: 600;
-    margin-bottom: 8px;
-    letter-spacing: 1px;
-  }
+  .source-item {
+    margin-bottom: 20px;
 
-  .detail-value {
-    font-size: 16px;
-    color: #e6e8ec;
-    font-family: "AlibabaSans-Medium", sans-serif;
+    strong {
+      color: rgba(255, 255, 255, 0.9);
+      display: block;
+      margin-bottom: 8px;
+      font-size: 0.95em;
+    }
 
-    &.document-ref {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 16px;
-      background: rgba($color-accent, 0.08);
-      border-radius: 8px;
-      border-left: 4px solid $color-accent;
+    p {
+      color: rgba(255, 255, 255, 0.7);
+      margin: 0;
+      line-height: 1.5;
+    }
 
-      i {
-        color: $color-accent;
-        font-size: 18px;
+    .confidence-indicator {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-weight: 600;
+      margin: 0;
+
+      &.high {
+        background: rgba(34, 197, 94, 0.2);
+        color: #22c55e;
+      }
+
+      &.medium {
+        background: rgba(234, 179, 8, 0.2);
+        color: #eab308;
+      }
+
+      &.low {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
       }
     }
   }
 }
 
-.confidence-display {
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid rgba(0, 212, 255, 0.1);
   display: flex;
-  align-items: center;
-  gap: 16px;
-}
+  justify-content: flex-end;
+  gap: 12px;
 
-.confidence-bar {
-  width: 120px;
-  height: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  overflow: hidden;
-}
+  .btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
 
-.confidence-fill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 1s ease-out;
-  animation: confidenceGrow 2s ease-out;
+    &.secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.8);
 
-  &.high {
-    background: linear-gradient(90deg, #22c55e, #16a34a);
-    width: 92%;
-  }
-
-  &.medium {
-    background: linear-gradient(90deg, #f59e0b, #d97706);
-    width: 75%;
-  }
-
-  &.low {
-    background: linear-gradient(90deg, #ef4444, #dc2626);
-    width: 55%;
+      &:hover {
+        background: rgba(255, 255, 255, 0.15);
+      }
+    }
   }
 }
 
-@keyframes confidenceGrow {
-  from {
-    width: 0%;
-  }
-}
+.no-data {
+  text-align: center;
+  padding: 100px 20px;
+  color: rgba(255, 255, 255, 0.6);
 
-.confidence-text {
-  font-size: 15px;
-  font-weight: 600;
-  font-family: "AlibabaSans-Medium", sans-serif;
-
-  &.high {
-    color: #22c55e;
-  }
-  &.medium {
-    color: #f59e0b;
-  }
-  &.low {
-    color: #ef4444;
-  }
-}
-
-.analysis-content {
-  .analysis-item {
+  p {
     margin-bottom: 20px;
-
-    strong {
-      display: block;
-      color: #ffffff;
-      font-size: 15px;
-      margin-bottom: 6px;
-      font-family: "AlibabaSans-Bold", sans-serif;
-    }
-
-    p {
-      color: #b0b7c3;
-      font-size: 15px;
-      line-height: 1.6;
-      margin: 0;
-    }
+    font-size: 1.1em;
   }
-}
 
-.action-section {
-  display: flex;
-  gap: 16px;
-  border-bottom: none;
-}
-
-.action-btn {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 20px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  border: none;
-  font-family: "AlibabaSans-Medium", sans-serif;
-
-  &.primary {
-    background: linear-gradient(135deg, $color-accent, $color-accent-darker);
-    color: #ffffff;
+  .btn {
+    display: inline-block;
+    padding: 12px 24px;
+    background: linear-gradient(135deg, #00d4ff, #0099ff);
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s ease;
 
     &:hover {
-      box-shadow: 0 6px 20px rgba($color-accent, 0.4);
       transform: translateY(-2px);
-    }
-  }
-
-  &.secondary {
-    background: rgba(255, 255, 255, 0.08);
-    color: #b0b7c3;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.15);
-      color: #ffffff;
-      border-color: rgba(255, 255, 255, 0.25);
+      box-shadow: 0 8px 24px rgba(0, 212, 255, 0.3);
     }
   }
 }
 
-.close-btn {
-  background: none;
-  border: none;
-  color: #8b93a7;
-  font-size: 26px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  padding: 10px;
-  border-radius: 8px;
-
-  &:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.1);
-  }
-}
-
-// Responsive design
 @media (max-width: 768px) {
-  .header-main {
+  .header {
     flex-direction: column;
-    align-items: flex-start !important;
-    gap: 10px;
+
+    .export-btn {
+      width: 100%;
+      justify-content: center;
+    }
   }
 
-  .analysis-badges {
-    flex-wrap: wrap;
+  .tabs-navigation {
+    .tab-btn {
+      padding: 12px 16px;
+      font-size: 0.9em;
+    }
   }
 
-  .insights-grid,
-  .risk-grid,
-  .metadata-grid {
+  .metrics-grid,
+  .risks-grid,
+  .sizing-grid,
+  .competitors-grid,
+  .valuation-grid,
+  .terms-grid,
+  .traction-section,
+  .documents-list {
     grid-template-columns: 1fr;
   }
 
-  .metrics-info {
-    flex-direction: column;
-    gap: 8px;
+  .tab-content {
+    padding: 20px;
   }
 
-  .debug-btn {
-    top: 10px;
-    right: 10px;
-    padding: 8px 12px;
-    font-size: 12px;
+  .modal-content {
+    max-width: 90vw;
   }
 }
 </style>
