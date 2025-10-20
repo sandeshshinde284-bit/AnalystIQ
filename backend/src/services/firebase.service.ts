@@ -8,7 +8,19 @@ import { googleCloudConfig } from "../config/googleCloud.js";
 import logger from "../utils/logger.js";
 import { AnalysisProgress } from "../services/analysisOrchestrator.service.js";
 
-// INTERFACES (omitted for brevity - they are correct in your file)
+// ============================================================================
+// INTERFACES
+// ============================================================================
+
+//export interface AnalysisProgress {
+//    status: "processing" | "completed" | "failed";
+//    step: string;
+//    progress: number;
+//    error?: string;
+//    message?: string;
+//    timestamp: string;
+//}
+
 export interface SavedAnalysis {
   id: string;
   userId: string;
@@ -56,6 +68,10 @@ export interface FirebaseConfig {
   mode: "production" | "development" | "simulation";
 }
 
+// ============================================================================
+// FIREBASE SERVICE CLASS
+// ============================================================================
+
 class FirebaseService {
   private readonly isEnabled: boolean;
   private firestore: Firestore | null = null;
@@ -72,6 +88,10 @@ class FirebaseService {
     this.isEnabled = this.initializeFirebase();
   }
 
+  // ============================================================================
+  // INITIALIZATION
+  // ============================================================================
+
   private initializeFirebase(): boolean {
     try {
       if (!googleCloudConfig.projectId) {
@@ -87,6 +107,8 @@ class FirebaseService {
         );
         return false;
       }
+
+      // Initialize Firebase Admin SDK if not already initialized
       if (!admin.apps.length) {
         admin.initializeApp({
           credential: admin.credential.cert({
@@ -98,6 +120,8 @@ class FirebaseService {
           storageBucket: `${googleCloudConfig.projectId}.appspot.com`,
         });
       }
+
+      // Initialize services
       this.firestore = getFirestore();
       this.storage = getStorage();
       this.auth = getAuth();
@@ -108,6 +132,10 @@ class FirebaseService {
       return false;
     }
   }
+
+  // ============================================================================
+  // ANALYSIS PROGRESS TRACKING
+  // ============================================================================
 
   async saveAnalysisProgress(
     analysisId: string,
@@ -138,7 +166,10 @@ class FirebaseService {
   async getAnalysisProgress(
     analysisId: string
   ): Promise<AnalysisProgress | null> {
-    if (!this.isEnabled || !this.firestore) return null;
+    if (!this.isEnabled || !this.firestore) {
+      return null;
+    }
+
     try {
       const doc = await this.firestore
         .collection(this.collections.analysisProgress)
@@ -152,7 +183,10 @@ class FirebaseService {
   }
 
   async deleteAnalysisProgress(analysisId: string): Promise<boolean> {
-    if (!this.isEnabled || !this.firestore) return false;
+    if (!this.isEnabled || !this.firestore) {
+      return false;
+    }
+
     try {
       await this.firestore
         .collection(this.collections.analysisProgress)
@@ -165,6 +199,10 @@ class FirebaseService {
       return false;
     }
   }
+
+  // ============================================================================
+  // ANALYSIS HISTORY & MANAGEMENT
+  // ============================================================================
 
   async getAnalysisHistory(
     userId: string,
@@ -299,6 +337,10 @@ class FirebaseService {
     }
   }
 
+  // ============================================================================
+  // AUTHENTICATION
+  // ============================================================================
+
   async verifyIdToken(
     token: string
   ): Promise<admin.auth.DecodedIdToken | null> {
@@ -353,8 +395,8 @@ class FirebaseService {
       // ✅ FIX #2: CONVERT UNDEFINED TO NULL
       const userRecord = await this.auth.createUser({
         email: userData.email,
-        displayName: userData.displayName ?? null,
-        photoURL: userData.photoURL ?? null,
+        displayName: userData.displayName ?? null, // ✅ FIX: Convert undefined to null
+        photoURL: userData.photoURL ?? null, // ✅ FIX: Convert undefined to null
         ...(userData.password && { password: userData.password }),
       });
 
@@ -370,6 +412,10 @@ class FirebaseService {
     }
   }
 
+  // ============================================================================
+  // HEALTH CHECK & UTILITIES
+  // ============================================================================
+
   async healthCheck(): Promise<boolean> {
     try {
       return this.isEnabled;
@@ -379,6 +425,10 @@ class FirebaseService {
     }
   }
 }
+
+// ============================================================================
+// EXPORT
+// ============================================================================
 
 export default new FirebaseService();
 export { FirebaseService };

@@ -1,3 +1,5 @@
+<!--FeatureCard.vue -->
+
 <template>
   <div class="card-container">
     <div class="icon-wrapper">
