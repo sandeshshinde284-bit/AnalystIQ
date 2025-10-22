@@ -54,6 +54,7 @@ apiClient.interceptors.response.use(
 interface AnalysisResponse {
   startupName: string;
   industry: string;
+  sector?: string;
   stage: string;
   analysisDate: string;
   recommendation: {
@@ -119,6 +120,7 @@ interface HealthResponse {
 export const analysisService = {
   async processAnalysis(
     files: File[],
+    category: string = "technology",
     progressCallback: ProgressCallback
   ): Promise<AnalysisResponse> {
     const formData = new FormData();
@@ -131,9 +133,12 @@ export const analysisService = {
       formData.append("documents", file);
     });
 
+    formData.append("category", category);
+    formData.append("sector", category);
+
     try {
       progressCallback("Uploading documents to Cloud Function...", 5);
-      console.log("📤 Sending", files.length, "file(s) to Cloud Function");
+      console.log("📤 Sending", files.length, "file(s) + category:", category);
 
       // Send to Cloud Function (use root endpoint /)
       // Do NOT manually set Content-Type - let axios handle it with boundary
@@ -192,35 +197,45 @@ export const analysisService = {
     }
   },
 
-  // async checkBackendHealth(): Promise<HealthResponse> {
-  //   try {
-  //     // Health check endpoint for Cloud Function
-  //     const response: AxiosResponse<HealthResponse> = await apiClient.get(
-  //       CLOUD_FUNCTION_URL + "?health=true"
-  //     );
-  //     console.log("✅ Health check passed");
-  //     return response.data;
-  //   } catch (error: any) {
-  //     console.error("❌ Health check failed:", error.message);
-  //     throw new Error("Cloud Function not reachable");
-  //   }
-  // },
-
   async checkBackendHealth(): Promise<HealthResponse> {
     try {
-      // Cloud Function doesn't have a dedicated health endpoint
-      // Just return a mock response indicating it's likely working
-      console.log("✅ Cloud Function endpoint is configured");
-      return {
-        status: "healthy",
-        service: "Cloud Function - Investment Analysis",
-        timestamp: new Date().toISOString(),
-      };
+      const healthUrl = CLOUD_FUNCTION_URL + "?health=true";
+
+      console.log("🏥 Checking Cloud Function health at:", healthUrl);
+      // Health check endpoint for Cloud Function
+      const response: AxiosResponse<HealthResponse> = await apiClient.get(
+        healthUrl,
+        { timeout: 10000 }
+      );
+
+      console.log("✅ Cloud Function is healthy");
+      return response.data;
     } catch (error: any) {
       console.error("❌ Health check failed:", error.message);
-      throw new Error("Cloud Function not reachable");
+      return {
+        status: "unhealthy",
+        timestamp: new Date().toISOString(),
+        service: "Cloud Function - Investment Analysis",
+        error: error.message || "Cloud Function not reachable",
+      };
     }
   },
+
+  //async checkBackendHealth(): Promise<HealthResponse> {
+  //  try {
+  //    // Cloud Function doesn't have a dedicated health endpoint
+  //    // Just return a mock response indicating it's likely working
+  //    console.log("✅ Cloud Function endpoint is configured");
+  //    return {
+  //      status: "healthy",
+  //      service: "Cloud Function - Investment Analysis",
+  //      timestamp: new Date().toISOString(),
+  //    };
+  //  } catch (error: any) {
+  //    console.error("❌ Health check failed:", error.message);
+  //    throw new Error("Cloud Function not reachable");
+  //  }
+  //},
 
   getApiUrl(): string {
     return CLOUD_FUNCTION_URL;

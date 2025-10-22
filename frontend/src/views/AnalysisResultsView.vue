@@ -7,6 +7,16 @@
       <div class="header">
         <div class="header-main">
           <h1>Investment Analysis: {{ analysisData.startupName }}</h1>
+          <div class="sector-info">
+            <span v-if="analysisData.sector" class="sector-badge">
+              <i class="ri-briefcase-line"></i>
+              {{ getSectorLabel(analysisData.sector) }}
+            </span>
+            <span v-if="analysisData.industry" class="industry-badge">
+              <i class="ri-building-line"></i>
+              {{ analysisData.industry }}
+            </span>
+          </div>
           <div class="analysis-badges">
             <div
               class="analysis-badge confidence"
@@ -461,6 +471,7 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAnalysisStore } from "@/stores/analysisStore";
 import MarketBenchmarkChart from "../components/Molecules/MarketBenchmarkChart.vue";
+import { getSectorByValue } from "../config/analysisConfig";
 
 const router = useRouter();
 const analysisStore = useAnalysisStore();
@@ -471,6 +482,11 @@ const activeTab = ref("summary");
 const showSourceModal = ref(false);
 const selectedSource = ref<any>(null);
 const selectedMetric = ref<any>(null);
+
+const getSectorLabel = (sectorValue: string) => {
+  const sector = getSectorByValue(sectorValue);
+  return sector?.label || sectorValue;
+};
 
 const tabs = [
   { id: "summary", name: "Executive Summary", icon: "ri-file-text-line" },
@@ -1516,6 +1532,46 @@ async function handlePrintReport() {
       transform: translateY(-2px);
       box-shadow: 0 8px 24px rgba(0, 212, 255, 0.3);
     }
+  }
+}
+.sector-info {
+  display: flex;
+  gap: 16px;
+  margin: 20px 0 10px 0;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.sector-badge,
+.industry-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+  border: 1px solid #667eea;
+}
+
+.industry-badge {
+  background: rgba(240, 147, 251, 0.1);
+  color: #f093fb;
+  border-color: #f093fb;
+}
+
+@media (max-width: 768px) {
+  .sector-info {
+    margin-top: 16px;
+    gap: 12px;
+  }
+
+  .sector-badge,
+  .industry-badge {
+    font-size: 0.85rem;
+    padding: 8px 12px;
   }
 }
 
