@@ -45,18 +45,13 @@
               <option value="" selected disabled>
                 🚀 Choose startup sector for evaluation
               </option>
-              <option value="saas">💻 SaaS & Enterprise Software</option>
-              <option value="fintech">💰 FinTech & Financial Services</option>
-              <option value="healthtech">
-                🏥 HealthTech & Medical Devices
+              <option
+                v-for="sector in STARTUP_SECTORS_LIST"
+                :key="sector.value"
+                :value="sector.value"
+              >
+                {{ sector.icon }} {{ sector.label }}
               </option>
-              <option value="edtech">📚 EdTech & Learning Platforms</option>
-              <option value="ai">🤖 AI/ML & Deep Tech</option>
-              <option value="ecommerce">🛒 E-Commerce & D2C Brands</option>
-              <option value="mobility">🚗 Mobility & Transportation</option>
-              <option value="climate">🌱 Climate Tech & Sustainability</option>
-              <option value="consumer">🛍️ Consumer Apps & Services</option>
-              <option value="other">🔧 Other Technology</option>
             </select>
             <i class="dropdown-icon ri-arrow-down-s-line"></i>
           </div>
@@ -94,8 +89,8 @@
           <h3 class="section-title">
             <i class="ri-folder-add-line"></i>
             Due Diligence Documents
-            <span class="optional"
-              >(Optional - but recommended for comprehensive evaluation)</span
+            <span class="optional">
+              (Optional - but recommended for comprehensive evaluation)</span
             >
           </h3>
           <p class="section-subtitle">
@@ -322,7 +317,10 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAnalysisStore } from "../stores/analysisStore";
 import FileUploadZone from "../components/Molecules/FileUploadZone.vue";
+import { getAllStartupSectors } from "../config/analysisConfig";
 const isSubmitting = ref(false);
+
+const STARTUP_SECTORS_LIST = getAllStartupSectors();
 
 // ✅ Type definitions to fix TypeScript errors
 interface UploadedFiles {
@@ -350,7 +348,12 @@ interface ValidationErrors {
 }
 
 type FileType = keyof UploadedFiles;
-type BackendStatus = "checking" | "connected" | "disconnected";
+type BackendStatus =
+  | "checking"
+  | "connected"
+  | "disconnected"
+  | "healthy"
+  | "unhealthy";
 
 const router = useRouter();
 const analysisStore = useAnalysisStore();
@@ -483,12 +486,13 @@ const uploadedFileCount = computed((): number => {
 onMounted(async (): Promise<void> => {
   // Check backend connection
   try {
+    analysisStore.clearAnalysis();
     const isConnected: boolean = await analysisStore.checkBackendConnection();
     backendStatus.value = isConnected ? "connected" : "disconnected";
 
     if (!isConnected) {
       console.warn(
-        "⚠️ Backend server not reachable. Please ensure backend is running on http://localhost:5000"
+        "⚠️ Backend server not reachable. Please ensure backend is running"
       );
     } else {
       console.log("✅ Backend connection established");

@@ -18,6 +18,7 @@ interface AnalysisResult {
   startupName: string;
   analysisDate: string;
   industry?: string;
+  sector?: string;
   stage?: string;
   recommendation: {
     text: string;
@@ -76,6 +77,7 @@ export const useAnalysisStore = defineStore("analysis", {
   state: () => ({
     isLoading: false,
     analysisResult: null as AnalysisResult | null,
+    selectedCategory: "technology" as string,
     error: null as string | null,
     progress: 0,
     progressMessage: "",
@@ -115,7 +117,10 @@ export const useAnalysisStore = defineStore("analysis", {
   }),
 
   actions: {
-    async startAnalysis(files: File[]): Promise<AnalysisResult> {
+    async startAnalysis(
+      files: File[],
+      category: string = "technology"
+    ): Promise<AnalysisResult> {
       this.isLoading = true;
       this.error = null;
       this.progress = 0;
@@ -130,11 +135,13 @@ export const useAnalysisStore = defineStore("analysis", {
       try {
         console.log(
           "🎯 Starting analysis with files:",
-          files.map((f) => f.name)
+          files.map((f) => f.name),
+          category
         );
 
         const result = await analysisService.processAnalysis(
           files,
+          category,
           this.updateProgress.bind(this)
         );
 
@@ -152,7 +159,19 @@ export const useAnalysisStore = defineStore("analysis", {
         return result as AnalysisResult;
       } catch (error: any) {
         console.error("❌ Analysis error:", error);
-        this.error = error.message || "Analysis failed";
+
+        // Better error messages
+        let errorMessage = error.message || "Analysis failed";
+
+        if (errorMessage.includes("Gemini response missing")) {
+          const missing = errorMessage.match(/missing[^:]*:\s*(.+)/i);
+          if (missing && missing[1]) {
+            const fields = missing[1];
+            errorMessage = `Analysis incomplete. Missing: ${fields}. Please try uploading more detailed documents.`;
+          }
+        }
+
+        this.error = errorMessage;
         this.isLoading = false;
         this.progress = 0;
 
@@ -169,12 +188,15 @@ export const useAnalysisStore = defineStore("analysis", {
       const files = Object.values(analysisData.files).filter(
         (f) => f !== null
       ) as File[];
+
+      this.selectedCategory = analysisData.category || "technology";
+
       console.log("🔧 Enhanced analysis with data:", {
         category: analysisData.category,
         fileCount: files.length,
         files: files.map((f: File) => f.name),
       });
-      return this.startAnalysis(files);
+      return this.startAnalysis(files, analysisData.category);
     },
 
     updateProgress(message: string, progress: number): void {
@@ -387,10 +409,20 @@ export const useAnalysisStore = defineStore("analysis", {
 
     async checkBackendConnection() {
       try {
-        await analysisService.checkBackendHealth();
-        return true;
+        const health = await analysisService.checkBackendHealth();
+
+        // Check if response indicates healthy status
+        const isHealthy = health.status === "healthy" || health.status === "ok";
+
+        if (isHealthy) {
+          console.log("✅ Backend is healthy");
+          return true;
+        } else {
+          console.warn("⚠️ Backend returned unhealthy status:", health.status);
+          return false;
+        }
       } catch (error) {
-        console.error("Backend health check failed:", error);
+        console.error("❌ Backend health check failed:", error);
         return false;
       }
     },
