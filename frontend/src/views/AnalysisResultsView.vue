@@ -32,7 +32,7 @@
           📄 Print & Download as PDF
         </button>
       </div>
-
+      <ValidationSummary v-if="showValidationSummary" />
       <!-- Recommendation Box -->
       <div class="recommendation-box">
         <div class="recommendation-header">
@@ -472,6 +472,7 @@ import { useRouter } from "vue-router";
 import { useAnalysisStore } from "@/stores/analysisStore";
 import MarketBenchmarkChart from "../components/Molecules/MarketBenchmarkChart.vue";
 import { getSectorByValue } from "../config/analysisConfig";
+import ValidationSummary from "../components/Molecules/ValidationSummary.vue";
 
 const router = useRouter();
 const analysisStore = useAnalysisStore();
@@ -500,9 +501,24 @@ const tabs = [
   { id: "traction", name: "Traction", icon: "ri-rocket-line" },
 ];
 
+const showValidationSummary = computed(() => {
+  return (
+    analysisStore.partialAnalysis ||
+    (analysisStore.validationSummary &&
+      analysisStore.validationSummary.length > 0)
+  );
+});
+
 onMounted(() => {
   if (!analysisData.value) {
     console.warn("No analysis data found");
+    console.log("=== ANALYSIS DATA ===");
+    console.log("Full result:", analysisData.value);
+    console.log("Key Metrics:", analysisData.value.keyMetrics);
+    console.log("Risk Assessment:", analysisData.value.riskAssessment);
+    console.log("Summary Content:", analysisData.value.summaryContent);
+    console.log("Validation Issues:", analysisStore.validationSummary);
+    console.log("Completeness:", analysisStore.analysisCompleteness);
     setTimeout(() => {
       router.push("/app/new-analysis");
     }, 2000);

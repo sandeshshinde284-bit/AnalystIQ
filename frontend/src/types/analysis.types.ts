@@ -1,4 +1,4 @@
-/ ============================================================================
+// ============================================================================
 // PART 2: TYPE DEFINITIONS
 // ============================================================================
 //
@@ -7,22 +7,27 @@
 /**
  * File upload state for a single document
  */
-export type UploadState = 'idle' | 'uploading' | 'success' | 'error';
+export type UploadState = "idle" | "uploading" | "success" | "error";
 
 /**
  * Analysis processing status
  */
-export type ProcessingStatus = 'pending' | 'processing' | 'completed' | 'error';
+export type ProcessingStatus = "pending" | "processing" | "completed" | "error";
 
 /**
  * Risk level classification
  */
-export type RiskLevel = 'low' | 'medium' | 'high';
+export type RiskLevel = "low" | "medium" | "high";
 
 /**
  * Investment recommendation
  */
-export type RecommendationType = 'STRONG_BUY' | 'BUY' | 'HOLD' | 'REVIEW' | 'PASS';
+export type RecommendationType =
+  | "STRONG_BUY"
+  | "BUY"
+  | "HOLD"
+  | "REVIEW"
+  | "PASS";
 
 /**
  * Represents a single uploaded document file
@@ -85,7 +90,7 @@ export interface ProcessingStep {
 export interface MetricSource {
   type: string;
   location: string;
-  confidence: 'high' | 'medium' | 'low';
+  confidence: "high" | "medium" | "low";
   details?: string;
 }
 

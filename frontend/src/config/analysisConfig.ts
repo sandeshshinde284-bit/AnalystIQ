@@ -87,94 +87,6 @@ export const STARTUP_SECTORS = {
 } as const;
 
 /**
- * Document type definitions with file size limits and accepted formats
- * Used for validation and UI display
- */
-export const DOCUMENT_TYPES = {
-  PITCH_DECK: {
-    key: "pitchDeck",
-    label: "Pitch Deck",
-    icon: "ri-presentation-fill",
-    maxSizeMB: 30,
-    acceptedFormats: [".pdf", ".ppt", ".pptx"],
-    mimeTypes: [
-      "application/pdf",
-      "application/vnd.ms-powerpoint",
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    ],
-    description: "Startup pitch deck presentation",
-    placeholder: "Pitch deck or presentation",
-    required: true,
-  },
-  FINANCIAL_MODEL: {
-    key: "financialModel",
-    label: "Financial Projections",
-    icon: "ri-line-chart-fill",
-    maxSizeMB: 10,
-    acceptedFormats: [".xlsx", ".xls", ".csv", ".pdf"],
-    mimeTypes: [
-      "application/vnd.ms-excel",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "text/csv",
-      "application/pdf",
-    ],
-    description: "Financial models and revenue projections",
-    placeholder: "Financial projections or revenue model",
-    required: false,
-  },
-  FOUNDER_PROFILES: {
-    key: "founderProfiles",
-    label: "Founder & Team Profiles",
-    icon: "ri-team-fill",
-    maxSizeMB: 8,
-    acceptedFormats: [".pdf", ".doc", ".docx"],
-    mimeTypes: [
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ],
-    description: "Founder CVs and team backgrounds",
-    placeholder: "Founder CVs & team backgrounds",
-    required: false,
-  },
-  MARKET_RESEARCH: {
-    key: "marketResearch",
-    label: "Market Research & Competition",
-    icon: "ri-bar-chart-box-fill",
-    maxSizeMB: 10,
-    acceptedFormats: [".pdf", ".doc", ".docx", ".xlsx", ".xls"],
-    mimeTypes: [
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/vnd.ms-excel",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    ],
-    description: "Market analysis and competitive landscape",
-    placeholder: "Market analysis & competitive landscape",
-    required: false,
-  },
-  TRACTION_DATA: {
-    key: "tractionData",
-    label: "Traction & Metrics Data",
-    icon: "ri-rocket-fill",
-    maxSizeMB: 5,
-    acceptedFormats: [".pdf", ".xlsx", ".csv", ".png", ".jpg", ".jpeg"],
-    mimeTypes: [
-      "application/pdf",
-      "application/vnd.ms-excel",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "text/csv",
-      "image/png",
-      "image/jpeg",
-    ],
-    description: "Growth metrics, user data, revenue figures",
-    placeholder: "Growth metrics, user data, revenue",
-    required: false,
-  },
-} as const;
-
-/**
  * Analysis processing steps shown to user during document processing
  * Each step represents a stage in the analysis pipeline
  */
@@ -223,23 +135,10 @@ export const FILE_SIZE_LIMITS = {
 } as const;
 
 /**
- * Helper function to get all document types as array
- * Useful for loops and iterations
- */
-export const getAllDocumentTypes = () => Object.values(DOCUMENT_TYPES);
-
-/**
  * Helper function to get all sectors as array
  * Useful for dropdowns
  */
 export const getAllStartupSectors = () => Object.values(STARTUP_SECTORS);
-
-/**
- * Helper function to find document type by key
- */
-export const getDocumentTypeByKey = (key: string) => {
-  return Object.values(DOCUMENT_TYPES).find((doc) => doc.key === key);
-};
 
 /**
  * Helper function to find startup sector by value
