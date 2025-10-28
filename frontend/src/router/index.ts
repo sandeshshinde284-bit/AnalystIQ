@@ -2,6 +2,42 @@
 
 import { createRouter, createWebHistory, RouteRecordRaw } from "vue-router";
 import HomeView from "../views/HomeView.vue";
+import { useAnalysisStore } from "@/stores/analysisStore";
+
+// ✅ NEW: Route guard to protect analysis routes
+// const requiresAnalysisData = (to: any, from: any, next: any) => {
+//   const analysisStore = useAnalysisStore();
+
+//   // If trying to access results/progress without data, redirect home
+//   if (
+//     !analysisStore.analysisResult &&
+//     (to.name === "AnalysisResults" || to.name === "AnalysisInProgress")
+//   ) {
+//     console.warn("No analysis data - redirecting home");
+//     next("/");
+//   } else {
+//     next();
+//   }
+// };
+
+const requiresAnalysisData = (to: any, from: any, next: any) => {
+  const analysisStore = useAnalysisStore();
+
+  console.log("🔐 Route Guard Check for:", to.name);
+  console.log("   isLoading:", analysisStore.isLoading);
+  console.log("   hasResult:", !!analysisStore.analysisResult);
+
+  // ✅ Allow if:
+  // 1. Analysis is currently loading (user just clicked button)
+  // 2. OR analysis result exists (backend completed)
+  if (analysisStore.isLoading || analysisStore.analysisResult) {
+    console.log("✅ Guard allowed - analysis in progress or complete");
+    next();
+  } else {
+    console.warn("❌ Guard blocked - no analysis data. Redirecting home");
+    next("/");
+  }
+};
 
 const routes: Array<RouteRecordRaw> = [
   // Public Routes
@@ -51,6 +87,7 @@ const routes: Array<RouteRecordRaw> = [
           title: "Analysis in Progress - AnalystIQ",
           requiresAuth: false,
         },
+        beforeEnter: requiresAnalysisData,
       },
       {
         path: "analysis-results",
@@ -60,6 +97,7 @@ const routes: Array<RouteRecordRaw> = [
             /* webpackChunkName: "analysis-results" */ "../views/AnalysisResultsView.vue"
           ),
         meta: { title: "Analysis Results - AnalystIQ", requiresAuth: false },
+        beforeEnter: requiresAnalysisData,
       },
     ],
   },

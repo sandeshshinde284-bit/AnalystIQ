@@ -111,7 +111,12 @@ from google.cloud import documentai, storage  # Document AI and GCS clients
 import vertexai  # Vertex AI initialization
 from vertexai.generative_models import GenerativeModel  # Gemini model
 import functions_framework  # For GCP Cloud Functions
-from datetime import datetime  # For timestamps
+from datetime import datetime, timedelta  # For timestamps
+from functools import wraps
+from google.cloud import firestore
+import uuid
+
+db = firestore.Client()
 
 # --- CONFIGURATION ---
 # Read project and processor info from environment or use default
@@ -142,6 +147,7 @@ MAX_ONLINE_PAGES = 15  # OCR: 15 pages max for online/synchronous
 MAX_IMAGELESS_PAGES = 30  # Imageless mode: 30 pages max
 MAX_BATCH_PAGES = 500  # Batch: 500 pages max
 USE_OCR = os.getenv("USE_OCR", "true").lower() == "true"  # Enable OCR by default
+request_tracker = {} # ✅ SECURITY: Rate limiting
 
 # =============================================================================
 # INITIALIZATION
@@ -175,6 +181,95 @@ def get_cors_headers(include_content_type=True):
         headers['Content-Type'] = 'application/json'
     return headers
 
+# ✅ NEW: Text sanitization
+def sanitize_extracted_text(text: str) -> str:
+    """Remove potentially dangerous characters from extracted text"""
+    if not text:
+        return ""
+    
+    # Remove null bytes (very dangerous)
+    text = text.replace('\x00', '')
+    
+    # Remove other control characters except newline, carriage return, tab
+    # Control characters are ASCII 0-31, but we keep \n (10), \r (13), \t (9)
+    text = ''.join(
+        char for char in text 
+        if ord(char) >= 32 or char in '\n\r\t'
+    )
+    
+    # Remove excessive whitespace
+    # This prevents weird spacing/newline injection
+    text = ' '.join(text.split())
+    
+    return text    
+
+# ✅ NEW: Magic byte verification
+def verify_file_magic_bytes(file_bytes: bytes, filename: str) -> tuple:
+    """Verify file type using magic bytes (file signatures)"""
+    magic_bytes_map = {
+        'pdf': [b'%PDF'],
+        'docx': [b'PK\x03\x04'],
+        'xlsx': [b'PK\x03\x04'],
+        'pptx': [b'PK\x03\x04'],
+        'doc': [b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'],
+        'ppt': [b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'],
+    }
+    
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    if ext not in magic_bytes_map:
+        return False, "UNSUPPORTED_FORMAT", f"File type .{ext} not supported"
+    
+    file_start = file_bytes[:8]
+    for signature in magic_bytes_map[ext]:
+        if file_start.startswith(signature):
+            return True, "VALID", "File signature verified"
+    
+    return False, "INVALID_FILE_SIGNATURE", f"File signature doesn't match .{ext} format"
+
+# ✅ NEW: Escape Gemini prompt input
+def escape_gemini_input(text: str) -> str:
+    """Escape special characters for Gemini"""
+    text = text.replace('```', '` ` `')
+    text = text.replace('---', '- - -')
+    text = text.replace('{{', '{ {')
+    return text
+
+# ✅ NEW: Rate limiting decorator
+def rate_limit(max_requests=10, time_window=60):
+    """Rate limit by IP address"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            client_ip = "unknown"
+            try:
+                if args and hasattr(args[0], 'remote_addr'):
+                    client_ip = args[0].remote_addr
+            except:
+                pass
+            
+            now = datetime.now()
+            if client_ip not in request_tracker:
+                request_tracker[client_ip] = []
+            
+            request_tracker[client_ip] = [
+                req_time for req_time in request_tracker[client_ip]
+                if now - req_time < timedelta(seconds=time_window)
+            ]
+            
+            if len(request_tracker[client_ip]) >= max_requests:
+                cors_headers_local = get_cors_headers()
+                return (
+                    json.dumps({"status": "error", "code": "RATE_LIMITED", 
+                               "message": "Too many requests. Please wait."}),
+                    429,
+                    cors_headers_local
+                )
+            
+            request_tracker[client_ip].append(now)
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
 # Helper: Validate uploaded file for type, size, and extension
 def validate_file_upload(file):
     """Validate uploaded file"""
@@ -201,29 +296,432 @@ def validate_file_upload(file):
     
     return True, "VALID", "File validation passed"
 
-# Helper: Validate extracted text from Document AI
-def validate_extraction(extracted_data):
-    """Validate extracted text from document"""
+# ✅ CONTENT-BASED VALIDATION (Not filename-based) - FORTRESS LEVEL
+def validate_extraction(extracted_data, request_id=None):
+    """
+    Comprehensive multi-layer validation:
+    1. Personal document detection
+    2. Non-business content detection
+    3. Business content verification
+    4. Content structure analysis
+    5. Optional Gemini secondary check
+    """
     full_text = extracted_data.get('full_text', '')
     page_count = extracted_data.get('page_count', 0)
+
+    # ✅ SECURITY: Sanitize text - ADD THESE 2 LINES
+    full_text = sanitize_extracted_text(full_text)
+    extracted_data['full_text'] = full_text
     
     # Check if text was extracted
     if not full_text or len(full_text) < MIN_EXTRACTED_TEXT:
-        return False, "NO_TEXT_EXTRACTED", "No readable text could be extracted from file. File may be corrupted, image-only, or encrypted"
+        return False, "NO_TEXT_EXTRACTED", "Unable to extract readable text from document. The file may be corrupted, image-only, encrypted, or not a valid business document."
     
     # Check page count
     if page_count == 0:
-        return False, "NO_PAGES_DETECTED", "No pages detected in document"
+        return False, "NO_PAGES_DETECTED", "Document appears to be empty or unreadable."
     
-    # Check if document appears to be a pitch deck (has business-related keywords)
     text_lower = full_text.lower()
-    pitch_keywords = ['company', 'product', 'market', 'revenue', 'team', 'founder', 'business', 'solution', 'investor', 'investment', 'traction', 'customer']
-    keyword_matches = sum(1 for kw in pitch_keywords if kw in text_lower)
     
-    if keyword_matches < 2:
-        return False, "INVALID_DOCUMENT_TYPE", "Document doesn't appear to be a business/pitch document. Missing key business-related content"
+    print(f"\n{'='*60}")
+    print(f"🔒 FORTRESS VALIDATION - 5 LAYER SECURITY CHECK")
+    print(f"{'='*60}")
     
-    return True, "VALID", "Text extraction validation passed"
+    # ============================================================================
+    # LAYER 1: PERSONAL DOCUMENT DETECTION
+    # ============================================================================
+    print(f"\n📋 LAYER 1: Personal Document Detection")
+    
+    personal_indicators = {
+        'identity_docs': {
+            'keywords': ['passport', 'aadhar', 'pan number', 'ssn', 'social security', 
+                        'driving license', 'voter id', 'national id', 'id card', 'license number',
+                        'national identification', 'voter card', 'id proof'],
+            'weight': 3.0  # High confidence indicator
+        },
+        'personal_medical': {
+            'keywords': ['prescription', 'medical report', 'diagnosis', 'discharge summary',
+                        'patient', 'physician', 'hospital', 'clinic', 'medical certificate',
+                        'health record', 'patient id', 'doctor'],
+            'weight': 2.5
+        },
+        'personal_financial': {
+            'keywords': ['credit card', 'debit card', 'bank account', 'account number',
+                        'swift code', 'ifsc', 'epfo', 'pf account', 'uan number',
+                        'provident fund', 'bank statement', 'cheque', 'account holder'],
+            'weight': 2.8
+        },
+        'personal_legal': {
+            'keywords': ['birth certificate', 'marriage certificate', 'divorce', 'will', 'testament',
+                        'adoption', 'death certificate', 'legal document'],
+            'weight': 2.5
+        },
+        'resume_cv': {
+            'keywords': ['objective:', 'work experience', 'skills section', 'education:', 'references',
+                        'cv', 'resume', 'curriculum vitae', 'employment history', 'professional summary'],
+            'weight': 3.5  # HIGHEST - clearest personal doc
+        },
+        'personal_photos': {
+            'keywords': ['photo', 'photograph', 'selfie', 'portrait', 'headshot', 'image', 'picture'],
+            'weight': 1.5
+        },
+    }
+    
+    personal_score = 0
+    detected_personal_types = []
+    
+    for category, config in personal_indicators.items():
+        keywords = config['keywords']
+        weight = config['weight']
+        keyword_matches = sum(1 for kw in keywords if kw in text_lower)
+        
+        if keyword_matches >= 3:  # 2+ keywords in this category
+            weighted_score = keyword_matches * weight
+            personal_score += weighted_score
+            detected_personal_types.append(f"{category}({keyword_matches})")
+            print(f"   ⚠️  Detected: {category} - {keyword_matches} keywords, Score: {weighted_score:.1f}")
+    
+    print(f"   📊 Personal Score: {personal_score:.1f}")
+    
+    if personal_score > 8:  # Stricter threshold
+        error_msg = f"Document appears to be personal ({', '.join(set(detected_personal_types))})"
+        print(f"   ❌ REJECTED: {error_msg}")
+        extracted_data['validation_error_code'] = 'PERSONAL_DOCUMENT'
+        if request_id:
+            write_error_to_firestore(request_id, 'PERSONAL_DOCUMENT', "This document contains personal information and cannot be analyzed. Please upload business documents only.")
+        return False, "PERSONAL_DOCUMENT", "This document contains personal information and cannot be analyzed. Please upload business documents only."
+    
+    resume_score = 0
+    if text_lower.count('objective:') > 0:
+        resume_score += 2
+    if text_lower.count('work experience') > 0:
+        resume_score += 2
+    if text_lower.count('skills') > 0:
+        resume_score += 1
+    if text_lower.count('education') > 0:
+        resume_score += 1
+
+    if resume_score >= 4:
+        # Flag as resume but DON'T reject yet
+        # Let validate_file_set handle it
+        extracted_data['document_classification'] = {
+            'type': 'RESUME',
+            'confidence': 'high',
+            'reason': 'Resume detected'
+        }
+        print(f"   ⚠️  Document appears to be a resume")
+
+
+    # ============================================================================
+    # LAYER 2: NON-BUSINESS CONTENT DETECTION
+    # ============================================================================
+    print(f"\n📋 LAYER 2: Non-Business Content Detection")
+    
+    non_business_indicators = {
+        'recipe': {
+            'keywords': ['recipe', 'ingredients', 'cooking', 'bake', 'fry', 'boil', 'simmer', 'instructions'],
+            'weight': 2.5
+        },
+        'news_article': {
+            'keywords': ['breaking news', 'news article', 'associated press', 'reuters', 'cnn', 'bbc', 
+                        'news report', 'journalist', 'published', 'headline'],
+            'weight': 2.0
+        },
+        'tutorial': {
+            'keywords': ['tutorial', 'how to', 'step by step', 'beginner guide', 'for dummies', 'instructions'],
+            'weight': 2.0
+        },
+        'entertainment': {
+            'keywords': ['movie', 'film', 'actor', 'actress', 'screenplay', 'plot summary', 'netflix', 'imdb'],
+            'weight': 2.0
+        },
+        'meme_cartoon': {
+            'keywords': ['meme', 'comic', 'cartoon', 'joke', 'funny', 'laugh', 'hilarious'],
+            'weight': 2.5
+        },
+    }
+    
+    non_business_score = 0
+    detected_non_business_types = []
+    
+    for category, config in non_business_indicators.items():
+        keywords = config['keywords']
+        weight = config['weight']
+        keyword_matches = sum(1 for kw in keywords if kw in text_lower)
+        
+        if keyword_matches >= 3:
+            weighted_score = keyword_matches * weight
+            non_business_score += weighted_score
+            detected_non_business_types.append(f"{category}({keyword_matches})")
+            print(f"   ⚠️  Detected: {category} - {keyword_matches} keywords, Score: {weighted_score:.1f}")
+    
+    print(f"   📊 Non-Business Score: {non_business_score:.1f}")
+    
+    if non_business_score > 10:
+        error_msg = f"Document contains non-business content ({', '.join(set(detected_non_business_types))})"
+        print(f"   ❌ REJECTED: {error_msg}")
+        if request_id:
+            write_error_to_firestore(request_id, 'NOT_BUSINESS_CONTENT', "This document does not appear to be a business document. Please upload startup pitch decks, financial models, or business-related documents.")
+        return False, "NOT_BUSINESS_CONTENT", "This document does not appear to be a business document. Please upload startup pitch decks, financial models, or business-related documents."
+    
+    # ============================================================================
+    # LAYER 3: BUSINESS CONTENT VERIFICATION
+    # ============================================================================
+    print(f"\n📋 LAYER 3: Business Content Verification")
+    
+    business_indicators = {
+        'pitch_deck': {
+            'keywords': ['pitch', 'startup', 'investment opportunity', 'funding round', 'series a',
+                        'seed round', 'venture capital', 'investor', 'raise', 'seed funding'],
+            'weight': 1.5
+        },
+        'financial': {
+            'keywords': ['revenue', 'profit', 'loss', 'balance sheet', 'cash flow', 'ebitda',
+                        'financial projection', 'forecast', 'budget', 'burn rate', 'arr', 'mrr', 'expenses'],
+            'weight': 1.3
+        },
+        'market_analysis': {
+            'keywords': ['market size', 'tam', 'sam', 'sop', 'competitive analysis', 
+                        'market share', 'competitor', 'industry analysis', 'market opportunity'],
+            'weight': 1.2
+        },
+        'product': {
+            'keywords': ['product', 'feature', 'technology', 'platform', 'software', 'service',
+                        'solution', 'development', 'engineering', 'product roadmap'],
+            'weight': 1.0
+        },
+        'team': {
+            'keywords': ['founder', 'ceo', 'team', 'experience', 'background', 'expertise', 'advisor',
+                        'management team', 'leadership'],
+            'weight': 1.1
+        },
+        'traction': {
+            'keywords': ['user', 'customer', 'growth', 'metric', 'kpi', 'retention', 'acquisition',
+                        'traction', 'milestone', 'achievement', 'users', 'monthly active'],
+            'weight': 1.0
+        },
+    }
+    
+    business_score = 0
+    detected_business_categories = []
+    
+    for category, config in business_indicators.items():
+        keywords = config['keywords']
+        weight = config['weight']
+        keyword_matches = sum(1 for kw in keywords if kw in text_lower)
+        
+        if keyword_matches >= 1:
+            weighted_score = keyword_matches * weight
+            business_score += weighted_score
+            detected_business_categories.append(f"{category}({keyword_matches})")
+            print(f"   ✅ Detected: {category} - {keyword_matches} keywords, Score: {weighted_score:.1f}")
+    
+    print(f"   📊 Business Score: {business_score:.1f}")
+    
+    if business_score < 2:  # Require minimum business content
+        print(f"   ❌ REJECTED: Insufficient business content (score: {business_score:.1f})")
+        if request_id:
+            write_error_to_firestore(request_id, 'INSUFFICIENT_BUSINESS_CONTENT', "Document does not contain enough business-related content. Please upload pitch decks, financial models, market research, or business documents.")
+        return False, "INSUFFICIENT_BUSINESS_CONTENT", "Document does not contain enough business-related content. Please upload pitch decks, financial models, market research, or business documents."
+    
+    # ============================================================================
+    # LAYER 4: PERSONAL vs BUSINESS RATIO CHECK
+    # ============================================================================
+    print(f"\n📋 LAYER 4: Personal vs Business Ratio Check")
+    
+    if business_score > 0:
+        personal_business_ratio = personal_score / business_score
+        print(f"   📊 Personal/Business Ratio: {personal_business_ratio:.2f}")
+        
+        if personal_business_ratio > 1.5 and personal_score > 5:  # Personal is >50% of business
+            print(f"   ❌ REJECTED: Too much personal content mixed in")
+            if request_id:
+                write_error_to_firestore(request_id, 'MIXED_PERSONAL_BUSINESS', "Document contains a mix of personal and business content. Please upload pure business documents.")
+            return False, "MIXED_PERSONAL_BUSINESS", "Document contains a mix of personal and business content. Please upload pure business documents."
+    
+    # ============================================================================
+    # LAYER 5: CONTENT STRUCTURE ANALYSIS
+    # ============================================================================
+    print(f"\n📋 LAYER 5: Content Structure Analysis")
+    
+    # Check if document is too short
+    word_count = len(full_text.split())
+    print(f"   📊 Word Count: {word_count}")
+    
+    if word_count < 30:
+        print(f"   ❌ REJECTED: Document too short")
+        if request_id:
+            write_error_to_firestore(request_id, 'INSUFFICIENT_CONTENT', "Document is too short to be a valid business document. Please upload documents with more detailed content.")
+        return False, "INSUFFICIENT_CONTENT", "Document is too short to be a valid business document. Please upload documents with more detailed content."
+    
+    # Check for likely scanned ID (mostly short fields/numbers)
+    lines = full_text.split('\n')
+    very_short_lines = sum(1 for line in lines if len(line.strip()) < 20 and line.strip())
+    short_line_ratio = very_short_lines / max(len(lines), 1)
+    
+    print(f"   📊 Short Lines Ratio: {short_line_ratio:.1%}")
+    
+    if short_line_ratio > 0.85:  # 70%+ very short lines
+        print(f"   ❌ REJECTED: Likely structured form or ID")
+        if request_id:
+            write_error_to_firestore(request_id, 'LIKELY_STRUCTURED_DOCUMENT', "This appears to be a structured form or ID document, not a business document. Please upload proper business documents.")
+        return False, "LIKELY_STRUCTURED_DOCUMENT", "This appears to be a structured form or ID document, not a business document. Please upload proper business documents."
+    
+    # ============================================================================
+    # LAYER 6: OPTIONAL GEMINI SECONDARY CHECK (for edge cases)
+    # ============================================================================
+    # Only do secondary check if confidence is low (business_score between 4-6)
+    
+    if business_score < 3:
+        print(f"\n📋 LAYER 6: Gemini Secondary Validation (Low Confidence)")
+        
+        try:
+            is_business = gemini_document_type_check(full_text, business_score)
+            
+            if not is_business:
+                print(f"   ❌ REJECTED: Gemini says not a business document")
+                if request_id:
+                    write_error_to_firestore(request_id, 'GEMINI_VALIDATION_FAILED', "AI analysis suggests this may not be a business document. Please verify and try again.")
+                return False, "GEMINI_VALIDATION_FAILED", "AI analysis suggests this may not be a business document. Please verify and try again."
+            else:
+                print(f"   ✅ PASSED: Gemini confirms business document")
+        except Exception as e:
+            print(f"   ⚠️  Gemini check failed (non-blocking): {str(e)}")
+            # Continue anyway if Gemini fails
+    
+    # ============================================================================
+    # FINAL DECISION
+    # ============================================================================
+    print(f"\n{'='*60}")
+    print(f"✅ VALIDATION PASSED - ALL LAYERS CLEARED")
+    print(f"{'='*60}")
+    print(f"📊 Final Scores:")
+    print(f"   Personal: {personal_score:.1f}")
+    print(f"   Business: {business_score:.1f}")
+    print(f"   Non-Business: {non_business_score:.1f}")
+    print(f"   Content Type: {', '.join(detected_business_categories)}")
+    print(f"\n🔍 DEBUG SCORES:")
+    print(f"   personal_score: {personal_score:.1f} (threshold: > 8.0)")
+    print(f"   business_score: {business_score:.1f} (threshold: < 2)")
+    print(f"   non_business_score: {non_business_score:.1f} (threshold: > 10.0)")
+    print(f"   short_line_ratio: {short_line_ratio:.1%} (threshold: > 85%)")
+    
+    return True, "VALID", "Content validation passed - Valid business document"
+
+def classify_document_type(extracted_text: str, filename: str) -> dict:
+    """
+    Classify document as PRIMARY or SUPPLEMENTARY
+    PRIMARY: Can be analyzed alone (pitch deck, financial model, business plan)
+    SUPPLEMENTARY: Needs other documents (resume, team profiles)
+    """
+    
+    text_lower = extracted_text.lower()
+    
+    # Check for RESUME
+    resume_keywords = ['objective:', 'work experience', 'skills section', 'education:', 
+                      'references', 'cv', 'resume', 'curriculum vitae', 'employment history']
+    resume_matches = sum(1 for kw in resume_keywords if kw in text_lower)
+    if resume_matches >= 2:
+        return {
+            "type": "RESUME",
+            "is_primary": False,
+            "description": "Resume/CV - Supplementary document"
+        }
+    
+    # Check for PITCH DECK
+    pitch_keywords = ['pitch', 'startup', 'investment opportunity', 'funding round', 
+                     'series a', 'seed round', 'venture capital', 'investor', 'raise']
+    pitch_matches = sum(1 for kw in pitch_keywords if kw in text_lower)
+    if pitch_matches >= 2:
+        return {
+            "type": "PITCH_DECK",
+            "is_primary": True,
+            "description": "Pitch Deck - Primary document"
+        }
+    
+    # Check for FINANCIAL MODEL
+    financial_keywords = ['revenue', 'profit', 'cash flow', 'budget', 'burn rate',
+                         'financial projection', 'forecast', 'balance sheet', 'ebitda']
+    financial_matches = sum(1 for kw in financial_keywords if kw in text_lower)
+    if financial_matches >= 3:
+        return {
+            "type": "FINANCIAL_MODEL",
+            "is_primary": True,
+            "description": "Financial Model - Primary document"
+        }
+    
+    # Check for BUSINESS PLAN
+    business_keywords = ['business model', 'market analysis', 'competitive analysis',
+                        'executive summary', 'operations plan', 'go-to-market']
+    business_matches = sum(1 for kw in business_keywords if kw in text_lower)
+    if business_matches >= 2:
+        return {
+            "type": "BUSINESS_PLAN",
+            "is_primary": True,
+            "description": "Business Plan - Primary document"
+        }
+    
+    # Check for MARKET RESEARCH
+    market_keywords = ['market size', 'competitors', 'industry analysis', 'market share',
+                      'competitive landscape', 'market opportunity']
+    market_matches = sum(1 for kw in market_keywords if kw in text_lower)
+    if market_matches >= 2:
+        return {
+            "type": "MARKET_RESEARCH",
+            "is_primary": True,
+            "description": "Market Research - Primary document"
+        }
+    
+    # Default: Uncertain
+    return {
+        "type": "UNKNOWN",
+        "is_primary": False,
+        "description": "Document type unclear"
+    }
+
+# ✅ NEW FUNCTION: Validate entire file set (not individual files)
+def validate_file_set(all_extracted_data: list, file_names: list) -> tuple:
+    """
+    Validate entire set of uploaded files
+    Returns: (is_valid, error_code, error_message)
+    """
+    
+    if not all_extracted_data or len(all_extracted_data) == 0:
+        return False, "NO_FILES", "No files to validate"
+    
+    has_primary_document = False
+    has_supplementary_document = False
+    document_types = []
+    
+    # Classify each file
+    for i, extracted_data in enumerate(all_extracted_data):
+        text = extracted_data.get('full_text', '')
+        filename = file_names[i] if i < len(file_names) else f"file_{i}"
+        
+        doc_info = classify_document_type(text, filename)
+        document_types.append(doc_info)
+        
+        if doc_info['is_primary']:
+            has_primary_document = True
+            print(f"   ✅ {filename}: {doc_info['description']}")
+        else:
+            has_supplementary_document = True
+            print(f"   ⚠️  {filename}: {doc_info['description']}")
+    
+    # VALIDATION LOGIC
+    
+    # ❌ CASE 1: Only supplementary documents (e.g., resume alone)
+    if has_supplementary_document and not has_primary_document:
+        return False, "SUPPLEMENTARY_ONLY", \
+            "Resume/Profile alone cannot be analyzed. Please upload a pitch deck, financial model, or business plan along with it."
+    
+    # ✅ CASE 2: Has primary document (with or without supplementary)
+    if has_primary_document:
+        return True, "VALID", "File set validation passed"
+    
+    # ❌ CASE 3: Unknown documents
+    return False, "UNKNOWN_DOCUMENTS", \
+        "Could not identify business documents. Please upload a pitch deck or financial model."
 
 # Helper: Validate Gemini AI response structure
 def validate_gemini_response(analysis):
@@ -265,189 +763,86 @@ def validate_gemini_response(analysis):
     
     return True, "VALID", "Gemini response validation passed"
 
+
+def update_firestore_progress(request_id: str, step: int, message: str, percent: int, status: str = "in_progress"):
+    """Write progress to Firestore"""
+    try:
+        db.collection('analysis_progress').document(request_id).set({
+            'step': step,
+            'message': message,
+            'percent': percent,
+            'status': status,
+            'timestamp': datetime.now().isoformat()
+        }, merge=True)
+        print(f"📊 Firestore: Step {step}/6 - {percent}%")
+    except Exception as e:
+        print(f"⚠️  Firestore error: {str(e)}")
+
+
+def write_error_to_firestore(request_id: str, error_code: str, error_message: str):
+    """Write validation error to Firestore"""
+    try:
+        db.collection('analysis_progress').document(request_id).set({
+            'step': 1,
+            'status': 'failed',
+            'error_code': error_code,
+            'error_message': error_message,
+            'timestamp': datetime.now().isoformat()
+        })
+        print(f"📊 Error logged to Firestore: {error_code}")
+    except Exception as e:
+        print(f"⚠️  Firestore error write failed: {str(e)}")
+
+
 # =============================================================================
 # MAIN CLOUD FUNCTION
 # =============================================================================
 
+@rate_limit(max_requests=10, time_window=60)
 @functions_framework.http
 def analyze_document(request: Request):
     """Production Investment Analysis Cloud Function"""
     
-    # Handle CORS preflight
-    if request.method == 'OPTIONS':
-        print("🔄 CORS preflight request")
-        headers = get_cors_headers(include_content_type=False)
-        return ('', 204, headers)
-    
     cors_headers = get_cors_headers()
     
-    try:
-        if request.args.get('health') == 'true':
-          return health_check(request)
+    # Generate request ID
+    request_id = str(uuid.uuid4())
+    print(f"🔑 Request ID: {request_id}")
     
+    try:
+        db.collection('analysis_progress').document(request_id).set({
+            'step': 0,
+            'message': 'Starting analysis...',
+            'percent': 0,
+            'status': 'in_progress',
+            'timestamp': datetime.now().isoformat()
+        })
+    except:
+        pass
+
+    try:
+        # Handle CORS preflight
+        if request.method == 'OPTIONS':
+            print("🔔 CORS preflight request")
+            headers = get_cors_headers(include_content_type=False)
+            return ('', 204, headers)
+        
+        # Health check endpoint
+        if request.args.get('health') == 'true':
+            return health_check(request)
+        
         print(f"\n{'='*80}")
         print(f"🚀 STARTUP ANALYSIS REQUEST RECEIVED")
-        print("\n" + "="*80)
-        print("🚀 INVESTMENT ANALYSIS REQUEST")
         print("="*80)
         print(f"📅 Timestamp: {datetime.now().isoformat()}")
         print(f"📍 Project: {PROJECT_ID} | Location: {LOCATION}")
         print(f"📄 Content-Type: {request.content_type}")
         
-        file_names = []
-        processed_files_info = []
-        
-        # Check if multipart form data
-        if request.content_type and 'multipart/form-data' in request.content_type:
-            files = request.files.getlist('documents')
-            
-            if not files:
-                print("❌ No files found in 'documents' field")
-                error_result = {
-                    "status": "error",
-                    "error_type": "MissingFilesError",
-                    "code": "FILE_NOT_PROVIDED",
-                    "message": "No files found. Submit files using 'documents' form field.",
-                    "suggestion": "Please select at least one PDF or document file to analyze",
-                    "timestamp": datetime.now().isoformat()
-                }
-                return (json.dumps(error_result), 400, cors_headers)
-            
-            print(f"📁 Found {len(files)} file(s): {[f.filename for f in files]}")
-            
-            all_extracted_data = []
-            validation_errors = []
-            
-            # ============================================================================
-            # FIX: Process each file - READ ONCE, USE MULTIPLE TIMES
-            # ============================================================================
-            for file in files:
-                if not file or not file.filename:
-                    print(f"⚠️ Skipping invalid file entry")
-                    continue
-                
-                print(f"\n📄 Processing: {file.filename}")
-                
-                # 🟢 CRITICAL FIX: Read file content ONCE and store it
-                # OLD CODE: file.read() was called in validate_file_upload, then again here
-                # This caused the second read to return empty buffer
-                file_bytes = file.read()  # Read the entire file into memory ONCE
-                file_size = len(file_bytes)
-                
-                print(f"   Size: {file_size / 1024:.1f}KB")
-                
-                # 🟢 Now validate using the bytes we already read
-                # Check file size
-                if file_size > MAX_FILE_SIZE:
-                    size_mb = file_size / (1024 * 1024)
-                    print(f"❌ File too large: {size_mb:.1f}MB (max {MAX_FILE_SIZE / (1024 * 1024):.0f}MB)")
-                    validation_errors.append({
-                        "filename": file.filename,
-                        "error": "FILE_TOO_LARGE",
-                        "message": f"File is {size_mb:.1f}MB. Maximum 50MB allowed"
-                    })
-                    continue
-                
-                if file_size == 0:
-                    print(f"❌ File is empty")
-                    validation_errors.append({
-                        "filename": file.filename,
-                        "error": "EMPTY_FILE",
-                        "message": "File is empty"
-                    })
-                    continue
-                
-                # Check file extension
-                ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
-                if not ext or ext not in ALLOWED_EXTENSIONS:
-                    print(f"❌ Invalid file type: .{ext}")
-                    validation_errors.append({
-                        "filename": file.filename,
-                        "error": "INVALID_FILE_TYPE",
-                        "message": f"File type '.{ext}' not supported. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
-                    })
-                    continue
-                
-                print(f"✅ File validation passed")
-                
-                try:
-                    # 🟢 Encode the bytes we already read (not reading again)
-                    file_content_base64 = base64.b64encode(file_bytes).decode('utf-8')
-                    
-                    # Extract text using Document AI
-                    print(f"   📤 Sending to Document AI for processing...")
-                    extracted_data = extract_with_document_ai(file_content_base64, file.filename)
-                    
-                    if "error" not in extracted_data:
-                        # Validate the extracted text content
-                        is_valid, error_code, error_msg = validate_extraction(extracted_data)
-                        if not is_valid:
-                            print(f"❌ Extraction validation failed: {error_msg}")
-                            validation_errors.append({
-                                "filename": file.filename,
-                                "error": error_code,
-                                "message": error_msg
-                            })
-                            continue
-                        
-                        file_names.append(file.filename)
-                        processed_files_info.append({
-                            "name": file.filename,
-                            "type": get_document_type(file.filename),
-                            "pages": extracted_data.get("page_count", 0),
-                            "size": file_size,
-                        })
-                        
-                        extracted_data["file_name"] = file.filename
-                        all_extracted_data.append(extracted_data)
-                        print(f"✅ File processed successfully: {extracted_data.get('page_count', 0)} pages")
-                    else:
-                        print(f"❌ Extraction failed: {extracted_data.get('error')}")
-                        validation_errors.append({
-                            "filename": file.filename,
-                            "error": "EXTRACTION_FAILED",
-                            "message": extracted_data.get('error', 'Unknown extraction error')
-                        })
-                
-                except Exception as file_error:
-                    print(f"❌ Error processing file: {str(file_error)}")
-                    validation_errors.append({
-                        "filename": file.filename,
-                        "error": "PROCESSING_ERROR",
-                        "message": str(file_error)
-                    })
-                    continue
-            
-            if not all_extracted_data:
-                print("❌ Failed to extract from any files")
-                error_result = {
-                    "status": "error",
-                    "error_type": "ExtractionError",
-                    "code": "NO_VALID_FILES",
-                    "message": "No valid files could be processed",
-                    "details": validation_errors,
-                    "suggestion": "Check your files and try again with valid PDF or document files",
-                    "timestamp": datetime.now().isoformat()
-                }
-                return (json.dumps(error_result), 400, cors_headers)
-            
-            # Combine text if multiple documents were successfully processed
-            if len(all_extracted_data) > 1:
-                print(f"\n📚 Combining {len(all_extracted_data)} documents for analysis")
-                combined_text = "\n\n---DOCUMENT_BREAK---\n\n".join([
-                    f"[{data.get('file_name', 'Document')}]\n" + data.get("full_text", "")
-                    for data in all_extracted_data
-                ])
-                extracted_data = {
-                    "full_text": combined_text,
-                    "page_count": sum(d.get("page_count", 0) for d in all_extracted_data),
-                    "file_names": file_names,
-                    "processing_method": "multi_document"
-                }
-            else:
-                extracted_data = all_extracted_data[0]
-        else:
-            print("❌ Invalid request - must be multipart/form-data")
+        # =====================================================================
+        # VALIDATE REQUEST FORMAT
+        # =====================================================================
+        if not request.content_type or 'multipart/form-data' not in request.content_type:
+            print(f"❌ Invalid request - must be multipart/form-data")
             error_result = {
                 "status": "error",
                 "error_type": "InvalidRequestError",
@@ -458,27 +853,216 @@ def analyze_document(request: Request):
             }
             return (json.dumps(error_result), 400, cors_headers)
         
-        if "error" in extracted_data:
-            print(f"❌ Extraction error: {extracted_data.get('error')}")
+        # =====================================================================
+        # GET FILES FROM REQUEST
+        # =====================================================================
+        files = request.files.getlist('documents')
+        
+        if not files:
+            print("❌ No files found in 'documents' field")
+            error_result = {
+                "status": "error",
+                "error_type": "MissingFilesError",
+                "code": "FILE_NOT_PROVIDED",
+                "message": "No files found. Submit files using 'documents' form field.",
+                "suggestion": "Please select at least one PDF or document file to analyze",
+                "timestamp": datetime.now().isoformat()
+            }
+            return (json.dumps(error_result), 400, cors_headers)
+        
+        print(f"📁 Found {len(files)} file(s): {[f.filename for f in files]}")
+        
+        # =====================================================================
+        # PROCESS EACH FILE
+        # =====================================================================
+        file_names = []
+        processed_files_info = []
+        all_extracted_data = []
+        validation_errors = []
+        
+        for file in files:
+            if not file or not file.filename:
+                print(f"⚠️ Skipping invalid file entry")
+                continue
+            
+            print(f"\n📄 Processing: {file.filename}")
+            
+            # Read file content ONCE
+            file_bytes = file.read()
+            file_size = len(file_bytes)
+            print(f"   Size: {file_size / 1024:.1f}KB")
+            
+            # Validate file size
+            if file_size > MAX_FILE_SIZE:
+                size_mb = file_size / (1024 * 1024)
+                print(f"❌ File too large: {size_mb:.1f}MB (max {MAX_FILE_SIZE / (1024 * 1024):.0f}MB)")
+                validation_errors.append({
+                    "filename": file.filename,
+                    "error": "FILE_TOO_LARGE",
+                    "message": f"File is {size_mb:.1f}MB. Maximum 50MB allowed"
+                })
+                continue
+            
+            # Validate file is not empty
+            if file_size == 0:
+                print(f"❌ File is empty")
+                validation_errors.append({
+                    "filename": file.filename,
+                    "error": "EMPTY_FILE",
+                    "message": "File is empty"
+                })
+                continue
+            
+            # Validate file extension
+            ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+            if not ext or ext not in ALLOWED_EXTENSIONS:
+                print(f"❌ Invalid file type: .{ext}")
+                validation_errors.append({
+                    "filename": file.filename,
+                    "error": "INVALID_FILE_TYPE",
+                    "message": f"File type '.{ext}' not supported. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+                })
+                continue
+            
+            # Verify file magic bytes (security check)
+            is_valid_signature, sig_code, sig_msg = verify_file_magic_bytes(file_bytes, file.filename)
+            if not is_valid_signature:
+                print(f"❌ Invalid file signature: {sig_msg}")
+                validation_errors.append({
+                    "filename": file.filename,
+                    "error": sig_code,
+                    "message": sig_msg
+                })
+                continue
+            
+            print(f"✅ File validation passed")
+            
+            try:
+                # Encode file bytes to base64
+                file_content_base64 = base64.b64encode(file_bytes).decode('utf-8')
+                
+                # Extract text using Document AI
+                print(f"   🔤 Sending to Document AI for processing...")
+                extracted_data = extract_with_document_ai(file_content_base64, file.filename)
+                
+                if "error" in extracted_data:
+                    print(f"❌ Extraction failed: {extracted_data.get('error')}")
+                    validation_errors.append({
+                        "filename": file.filename,
+                        "error": "EXTRACTION_FAILED",
+                        "message": extracted_data.get('error', 'Unknown extraction error')
+                    })
+                    continue
+                
+                # Validate extracted content
+                is_valid, error_code, error_msg = validate_extraction(extracted_data, request_id)
+                if not is_valid:
+                    print(f"❌ Extraction validation failed: {error_msg}")
+                    validation_errors.append({
+                        "filename": file.filename,
+                        "error": error_code,
+                        "message": error_msg,
+                        "document_type": extracted_data.get('document_classification', {}).get('type', 'UNKNOWN'),
+                        "is_primary": extracted_data.get('document_classification', {}).get('is_primary', False)
+                    })
+                    continue
+                
+                # File processed successfully
+                file_names.append(file.filename)
+                processed_files_info.append({
+                    "name": file.filename,
+                    "type": get_document_type(file.filename),
+                    "pages": extracted_data.get("page_count", 0),
+                    "size": file_size,
+                })
+                
+                extracted_data["file_name"] = file.filename
+                all_extracted_data.append(extracted_data)
+                print(f"✅ File processed successfully: {extracted_data.get('page_count', 0)} pages")
+                update_firestore_progress(request_id, 1, "Extracting text from documents", 15)
+                
+            except Exception as file_error:
+                print(f"❌ Error processing file: {str(file_error)}")
+                validation_errors.append({
+                    "filename": file.filename,
+                    "error": "PROCESSING_ERROR",
+                    "message": str(file_error)
+                })
+                continue
+        
+        # =====================================================================
+        # CHECK IF ANY FILES WERE SUCCESSFULLY PROCESSED
+        # =====================================================================
+        if not all_extracted_data:
+            print(f"❌ No valid files could be processed")
             error_result = {
                 "status": "error",
                 "error_type": "ExtractionError",
-                "code": "DOCUMENT_AI_FAILED",
-                "message": f"Document extraction failed: {extracted_data.get('error')}",
-                "suggestion": "Try with a different file or ensure the PDF is valid and readable",
+                "code": "NO_VALID_FILES",
+                "message": "No valid files could be processed",
+                "details": validation_errors,
                 "timestamp": datetime.now().isoformat()
             }
-            return (json.dumps(error_result), 500, cors_headers)
+            return (json.dumps(error_result), 400, cors_headers)
+        
+        # =====================================================================
+        # VALIDATE FILE SET
+        # =====================================================================
+        print(f"\n📋 VALIDATING FILE SET ({len(all_extracted_data)} files)")
+        is_valid_set, set_code, set_msg = validate_file_set(all_extracted_data, file_names)
+        
+        if not is_valid_set:
+            print(f"❌ File set validation failed: {set_msg}")
+            if request_id:
+                write_error_to_firestore(request_id, set_code, set_msg)
+            error_result = {
+                "status": "error",
+                "error_type": "FileSetValidationError",
+                "code": set_code,
+                "message": set_msg,
+                "timestamp": datetime.now().isoformat()
+            }
+            return (json.dumps(error_result), 400, cors_headers)
+        
+        print(f"✅ File set validation passed")
+        update_firestore_progress(request_id, 2, "Analyzing pitch deck content", 25)
+        
+        # =====================================================================
+        # COMBINE MULTIPLE DOCUMENTS IF NEEDED
+        # =====================================================================
+        if len(all_extracted_data) > 1:
+            print(f"\n🔚 Combining {len(all_extracted_data)} documents for analysis")
+            combined_text = "\n\n---DOCUMENT_BREAK---\n\n".join([
+                f"[{data.get('file_name', 'Document')}]\n" + data.get("full_text", "")
+                for data in all_extracted_data
+            ])
+            extracted_data = {
+                "full_text": combined_text,
+                "page_count": sum(d.get("page_count", 0) for d in all_extracted_data),
+                "file_names": file_names,
+                "processing_method": "multi_document"
+            }
+        else:
+            extracted_data = all_extracted_data[0]
         
         print(f"\n✅ Extraction successful")
         print(f"   Pages: {extracted_data.get('page_count')}")
         print(f"   Text length: {len(extracted_data.get('full_text', ''))} characters")
         
+        # =====================================================================
+        # GET SECTOR PARAMETER
+        # =====================================================================
         sector = request.form.get('sector') or request.form.get('category') or 'other'
-        print(f"📍 Sector received: {sector}")
-
-        # Step 4: Analyze with Gemini
+        valid_sectors = ['saas', 'fintech', 'healthtech', 'edtech', 'ai', 'ecommerce', 'mobility', 'climate', 'consumer', 'other']
+        if sector.lower() not in valid_sectors:
+            sector = 'other'
+        print(f"🏭 Sector received: {sector}")
+        
+        # =====================================================================
+        # ANALYZE WITH GEMINI
+        # =====================================================================
         print(f"\n🧠 ANALYZING WITH GEMINI")
+        update_firestore_progress(request_id, 3, "Analyzing business model and strategy", 40)
         analysis = analyze_investment_opportunity(extracted_data, file_names, sector)
         
         if "error" in analysis:
@@ -493,32 +1077,21 @@ def analyze_document(request: Request):
             }
             return (json.dumps(error_result), 500, cors_headers)
         
-        # Validate Gemini response structure
-        # is_valid, error_code, error_msg = validate_gemini_response(analysis)
-        # if not is_valid:
-        #     print(f"❌ Gemini response validation failed: {error_msg}")
-        #     error_result = {
-        #         "status": "error",
-        #         "error_type": "AnalysisError",
-        #         "code": error_code,
-        #         "message": error_msg,
-        #         "suggestion": "The AI analysis was incomplete. Try with a more detailed pitch deck",
-        #         "timestamp": datetime.now().isoformat()
-        #     }
-        #     return (json.dumps(error_result), 500, cors_headers)
-        
         print(f"✅ Gemini analysis successful")
         
-        # Create page maps for source verification
+        # =====================================================================
+        # CREATE PAGE MAPS
+        # =====================================================================
         page_maps = create_page_map_from_text(
             extracted_data.get("full_text", ""),
             extracted_data.get("file_name", "document.pdf")
         )
         
-        # Get the model used from analysis
+        # =====================================================================
+        # BUILD FINAL RESPONSE
+        # =====================================================================
         model_used = analysis.get("ai_model_used", "gemini-1.5-flash")
         
-        # Build the final structured response
         result = {
             "startupName": analysis.get("startupName", "Unknown Company"),
             "industry": analysis.get("industry", ""),
@@ -559,12 +1132,24 @@ def analyze_document(request: Request):
             }
         }
         
-        print(f"\n✅ ANALYSIS COMPLETE")
+        update_firestore_progress(request_id, 6, "Generating deal memo", 100)
+        
+        try:
+            db.collection('analysis_progress').document(request_id).update({
+                'status': 'completed'
+            })
+        except:
+            pass
+        
+        print(f"\nâœ… ANALYSIS COMPLETE")
         print("="*80)
+        result['request_id'] = request_id
         return (json.dumps(result), 200, cors_headers)
     
     except Exception as e:
         print(f"\n❌ ERROR: {str(e)}")
+        if 'request_id' in locals():
+            write_error_to_firestore(request_id, 'INTERNAL_ERROR', str(e))
         import traceback
         traceback.print_exc()
         
@@ -846,7 +1431,69 @@ def batch_process_document(pdf_bytes: bytes, filename: str) -> dict:
 # GEMINI ANALYSIS
 # =============================================================================
 
-def analyze_investment_opportunity(extracted_data: dict, file_names: list = [], sector: str = None) -> dict:
+# ✅ NEW: Gemini Secondary Validation for Edge Cases
+def gemini_document_type_check(text: str, business_score: float) -> bool:
+    """
+    Use Gemini to verify if document is actually a business document
+    Only called when confidence is low (4-6 score range)
+    """
+    try:
+        print(f"   → Initializing Gemini for secondary check...")
+        
+        # Use fastest model available
+        models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash"]
+        model = None
+        
+        for model_name in models_to_try:
+            try:
+                model = GenerativeModel(model_name)
+                # Quick test
+                model.generate_content("test", generation_config={"max_output_tokens": 2})
+                print(f"   → Using {model_name} for validation")
+                break
+            except:
+                continue
+        
+        if not model:
+            print(f"   ⚠️  No Gemini models available for secondary check")
+            return business_score >= 4  # Fall back to score threshold
+        
+        prompt = f"""You are a document classifier. Analyze this text ONLY.
+
+Is this a BUSINESS DOCUMENT (pitch deck, financial model, market analysis, business plan, etc)?
+Answer ONLY with: YES or NO
+
+Text (first 2000 chars):
+{text[:2000]}
+
+Rules:
+- YES: If document is about a startup, business, products, finances, market analysis, etc.
+- NO: If document is personal (ID, resume, medical, news, recipe, entertainment, etc.)
+- Answer ONLY: YES or NO (nothing else)
+"""
+        
+        response = model.generate_content(
+            prompt,
+            generation_config={
+                "temperature": 0.1,
+                "max_output_tokens": 10,
+            }
+        )
+        
+        response_text = response.text.strip().upper() if hasattr(response, 'text') else ""
+        
+        print(f"   → Gemini Response: {response_text}")
+        
+        if "YES" in response_text:
+            return True
+        else:
+            return False
+            
+    except Exception as e:
+        print(f"   ⚠️  Gemini secondary check error: {str(e)}")
+        return business_score >= 4  # Fall back to score threshold
+
+def analyze_investment_opportunity(extracted_data: dict, file_names: list = [], sector: str = None, request_id: str = None) -> dict:
     """Real investment analysis using Gemini - FIXED JSON parsing"""
     try:
         if "error" in extracted_data:
@@ -890,6 +1537,9 @@ def analyze_investment_opportunity(extracted_data: dict, file_names: list = [], 
         
         print(f"   → Analyzing {page_count} pages with {model_used}...")
         
+         # ✅ SECURITY: Escape Gemini input
+        full_text_escaped = escape_gemini_input(full_text)
+
         # Build analysis prompt - SIMPLIFIED FOR RELIABILITY
 # REPLACE the analyze_investment_opportunity() function prompt section with this:
 
@@ -903,7 +1553,7 @@ DOCUMENT INFO:
 - Pages: {page_count}
 
 DOCUMENT CONTENT:
-{full_text[:100000]}
+{full_text_escaped[:100000]}
 
 Return ONLY this JSON structure. Fill in EVERY field with data from the document. If data is not available, use "Not specified in document" or empty array [].
 
@@ -1101,7 +1751,10 @@ CRITICAL RULES:
         print(f"   ✅ Analysis parsed successfully")
         print(f"   → Startup: {analysis.get('startupName', 'Unknown')}")
         print(f"   → Recommendation: {analysis.get('recommendation', {}).get('text', 'Unknown')} ({analysis.get('recommendation', {}).get('score', 0)}/100)")
-        
+        if request_id:
+            update_firestore_progress(request_id, 5, "Benchmarking against market data", 85)
+
+
         return analysis
     
     except ValueError as e:

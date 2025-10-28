@@ -309,6 +309,14 @@
         </button>
       </form>
     </div>
+    <ErrorPopup
+      :is-visible="showErrorPopup"
+      :error-type="errorPopupConfig.type"
+      :title="errorPopupConfig.title"
+      :message="errorPopupConfig.message"
+      :suggestions="errorPopupConfig.suggestions"
+      @close="closeErrorPopup"
+    />
   </div>
 </template>
 
@@ -318,7 +326,22 @@ import { useRouter } from "vue-router";
 import { useAnalysisStore } from "../stores/analysisStore";
 import FileUploadZone from "../components/Molecules/FileUploadZone.vue";
 import { getAllStartupSectors } from "../config/analysisConfig";
+import ErrorPopup from "../components/Molecules/ErrorPopup.vue";
 const isSubmitting = ref(false);
+
+// ✅ ADD ERROR POPUP STATE
+const showErrorPopup = ref(false);
+const errorPopupConfig = ref<{
+  type: "personal" | "non-business" | "insufficient" | "format" | "mixed";
+  title: string;
+  message: string;
+  suggestions: string[];
+}>({
+  type: "personal",
+  title: "Document Validation Failed",
+  message: "This document cannot be analyzed.",
+  suggestions: [],
+});
 
 const STARTUP_SECTORS_LIST = getAllStartupSectors();
 
@@ -484,6 +507,36 @@ const uploadedFileCount = computed((): number => {
 
 // Backend status check on mount
 onMounted(async (): Promise<void> => {
+  if (analysisStore.error) {
+    console.log("❌ Error from progress page detected:", analysisStore.error);
+
+    showErrorPopup.value = true;
+    errorPopupConfig.value = {
+      type: "format",
+      title: "❌ Analysis Failed",
+      message: analysisStore.error,
+      suggestions: [
+        "Check your document format",
+        "Try uploading a different file",
+        "Ensure the document is a valid business document",
+      ],
+    };
+
+    // Clear error so it doesn't show on next visit
+    analysisStore.error = null;
+
+    // Still check backend connection
+    try {
+      const isConnected: boolean = await analysisStore.checkBackendConnection();
+      backendStatus.value = isConnected ? "connected" : "disconnected";
+    } catch (error: any) {
+      console.error("🔌 Backend connection check failed:", error);
+      backendStatus.value = "disconnected";
+    }
+    // Don't continue - let user close popup and retry
+    return;
+  }
+
   // Check backend connection
   try {
     analysisStore.clearAnalysis();
@@ -517,7 +570,7 @@ function getButtonText(): string {
   return "Upload Documents to Begin";
 }
 
-// Enhanced file validation with individual error tracking
+// ✅ SIMPLIFIED FRONTEND VALIDATION (just basic checks, backend does content validation)
 function validateFile(file: File, documentType: FileType): boolean {
   const rules = fileValidation[documentType];
 
@@ -532,7 +585,7 @@ function validateFile(file: File, documentType: FileType): boolean {
     return false;
   }
 
-  // Check file type
+  // Check file extension
   const fileName: string = file.name.toLowerCase();
   const hasValidExtension: boolean = rules.extensions.some((ext: string) =>
     fileName.endsWith(ext)
@@ -543,6 +596,11 @@ function validateFile(file: File, documentType: FileType): boolean {
       `Invalid file type. Supported: ${rules.extensions.join(", ")}`;
     return false;
   }
+
+  // ✅ NOTE: Filename checking removed - backend validates actual content
+  console.log(
+    `✅ Frontend validation passed for ${fileName}. Backend will verify actual document content.`
+  );
 
   return true;
 }
@@ -585,12 +643,142 @@ async function handleAnalysis(): Promise<void> {
     };
 
     console.log("🚀 Starting analysis with:", analysisData);
-    await analysisStore.runEnhancedAnalysis(analysisData);
+
+    // ✅ Set loading state FIRST
+    analysisStore.isLoading = true;
+
+    // ✅ START analysis but DON'T wait for it to complete
+    analysisStore.runEnhancedAnalysis(analysisData).catch((error: any) => {
+      console.error("❌ Analysis error caught:", error);
+
+      // Extract error code
+      const errorCode = error.code;
+      const errorTypeMap: Record<
+        string,
+        "personal" | "non-business" | "insufficient" | "format" | "mixed"
+      > = {
+        PERSONAL_DOCUMENT: "personal",
+        NOT_BUSINESS_CONTENT: "non-business",
+        INSUFFICIENT_BUSINESS_CONTENT: "insufficient",
+        INVALID_FILE_SIGNATURE: "format",
+        NO_TEXT_EXTRACTED: "format",
+        MIXED_PERSONAL_BUSINESS: "mixed",
+        GEMINI_VALIDATION_FAILED: "non-business",
+        LIKELY_STRUCTURED_DOCUMENT: "format",
+      };
+
+      const titleMap: Record<string, string> = {
+        PERSONAL_DOCUMENT: "🔒 Personal Document Detected",
+        NOT_BUSINESS_CONTENT: "📄 Not a Business Document",
+        INSUFFICIENT_BUSINESS_CONTENT: "📊 Insufficient Business Content",
+        INVALID_FILE_SIGNATURE: "❌ File Corrupted or Invalid",
+        NO_TEXT_EXTRACTED: "❌ Cannot Read Document",
+        MIXED_PERSONAL_BUSINESS: "⚠️ Mixed Content Detected",
+        GEMINI_VALIDATION_FAILED: "🤖 AI Validation Failed",
+        LIKELY_STRUCTURED_DOCUMENT: "📋 Form or ID Document",
+      };
+
+      const messageMap: Record<string, string> = {
+        PERSONAL_DOCUMENT:
+          "This document appears to contain personal information.\n\nWe cannot analyze personal or confidential documents to protect your privacy.",
+        NOT_BUSINESS_CONTENT:
+          "This document doesn't appear to be business-related.\n\nIt may contain news, recipes, entertainment, or other non-business content.",
+        INSUFFICIENT_BUSINESS_CONTENT:
+          "The document is too short or lacks business information.\n\nPlease ensure your document includes details about your business model, market opportunity, finances, and team.",
+        INVALID_FILE_SIGNATURE:
+          "File is corrupted or not a valid document.\n\nPlease reupload a valid PDF, DOCX, or PPTX file.",
+        NO_TEXT_EXTRACTED:
+          "Unable to extract text from the document.\n\nIt might be corrupted, password-protected, or an image without text.",
+        MIXED_PERSONAL_BUSINESS:
+          "Document contains both personal and business information.\n\nPlease upload pure business documents.",
+        GEMINI_VALIDATION_FAILED:
+          "AI validation failed. The document may not be a valid business document.\n\nPlease try a different file.",
+        LIKELY_STRUCTURED_DOCUMENT:
+          "This appears to be a form or ID document.\n\nPlease upload business documents like pitch decks or financial models.",
+      };
+
+      const suggestionsMap: Record<string, string[]> = {
+        PERSONAL_DOCUMENT: [
+          "Startup Pitch Deck",
+          "Financial Projections/Model",
+          "Business Plan",
+          "Market Research",
+          "Founder Profiles",
+          "Traction Data",
+        ],
+        NOT_BUSINESS_CONTENT: [
+          "Pitch decks",
+          "Financial models",
+          "Market analysis",
+          "Business plans",
+        ],
+        INSUFFICIENT_BUSINESS_CONTENT: [
+          "Add business model details",
+          "Include market sizing (TAM/SAM/SOM)",
+          "Add financial projections",
+          "Include team information",
+        ],
+        INVALID_FILE_SIGNATURE: [
+          "Re-export the document as PDF",
+          "Check file format",
+          "Verify file is not corrupted",
+        ],
+        NO_TEXT_EXTRACTED: [
+          "Re-export document as PDF",
+          "Remove password protection",
+          "Use OCR on scanned images",
+        ],
+        MIXED_PERSONAL_BUSINESS: [
+          "Remove personal information",
+          "Use business documents only",
+        ],
+        GEMINI_VALIDATION_FAILED: [
+          "Try a different document",
+          "Ensure it's business-related",
+        ],
+        LIKELY_STRUCTURED_DOCUMENT: [
+          "Upload pitch decks",
+          "Upload financial models",
+          "Upload market research",
+        ],
+      };
+
+      // Show error popup
+      if (errorCode && errorTypeMap[errorCode]) {
+        showErrorPopup.value = true;
+        errorPopupConfig.value = {
+          type: errorTypeMap[errorCode],
+          title: titleMap[errorCode],
+          message: messageMap[errorCode],
+          suggestions: suggestionsMap[errorCode],
+        };
+      } else {
+        showErrorPopup.value = true;
+        errorPopupConfig.value = {
+          type: "format",
+          title: "❌ Analysis Failed",
+          message: error.message || "An error occurred. Please try again.",
+          suggestions: ["Check the document", "Try a different file"],
+        };
+      }
+
+      // Reset loading state
+      analysisStore.isLoading = false;
+      isSubmitting.value = false;
+    });
+
+    // ✅ IMMEDIATELY redirect to progress page (DON'T wait)
+    console.log("📍 Redirecting to analysis-in-progress");
     router.push("/app/analysis-in-progress");
   } catch (error: any) {
-    console.error("❌ Analysis failed:", error);
-    alert(`Analysis failed: ${error.message}`);
+    console.error("❌ Unexpected error:", error);
+    isSubmitting.value = false;
   }
+}
+
+// ✅ ADD CLOSE POPUP HANDLER
+function closeErrorPopup() {
+  showErrorPopup.value = false;
 }
 
 // ✅ HELPER FUNCTIONS - PROPERLY TYPED
