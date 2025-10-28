@@ -117,6 +117,152 @@ interface HealthResponse {
   [key: string]: any;
 }
 
+export interface ErrorWithCode extends Error {
+  code?: string;
+}
+
+// ============================================================================
+// SECURITY ERROR MAP
+// ============================================================================
+const SECURITY_ERROR_MAP: Record<string, { icon: string; message: string }> = {
+  RATE_LIMITED: {
+    icon: "⏱️",
+    message: "Too many requests. Please wait 60 seconds before trying again.",
+  },
+  INVALID_FILE_SIGNATURE: {
+    icon: "❌",
+    message: "File is corrupted or not a valid document. Please reupload.",
+  },
+  PERSONAL_DOCUMENT: {
+    icon: "🔒",
+    message:
+      "Personal documents cannot be analyzed. Upload business documents only.",
+  },
+  NOT_BUSINESS_CONTENT: {
+    icon: "📄",
+    message:
+      "This doesn't appear to be a business document. Try a different file.",
+  },
+  INSUFFICIENT_BUSINESS_CONTENT: {
+    icon: "📊",
+    message: "Document needs more business-related content.",
+  },
+  GEMINI_VALIDATION_FAILED: {
+    icon: "🤖",
+    message: "AI validation failed. Please try a different document.",
+  },
+  MIXED_PERSONAL_BUSINESS: {
+    icon: "⚠️",
+    message: "Document contains mixed personal and business content.",
+  },
+  NO_TEXT_EXTRACTED: {
+    icon: "🔍",
+    message: "Could not extract text. File may be corrupted or image-only.",
+  },
+  LIKELY_STRUCTURED_DOCUMENT: {
+    icon: "📋",
+    message:
+      "This appears to be a form or ID. Please upload business documents.",
+  },
+};
+
+// ============================================================================
+// ✅ NEW: Rate Limit Handling Interceptor
+// ============================================================================
+
+interface RetryConfig {
+  maxRetries: number;
+  delayMs: number;
+  backoffMultiplier: number;
+}
+
+const defaultRetryConfig: RetryConfig = {
+  maxRetries: 3,
+  delayMs: 1000,
+  backoffMultiplier: 2,
+};
+
+// Track retry attempts per URL
+const retryAttempts = new Map<string, number>();
+
+apiClient.interceptors.response.use(
+  (response: AxiosResponse) => {
+    console.log("✅ API Response:", response.status, response.statusText);
+    // Clear retry counter on success
+    retryAttempts.delete(response.config.url || "");
+    return response;
+  },
+  async (error: AxiosError) => {
+    const config = error.config as InternalAxiosRequestConfig;
+
+    // ✅ HANDLE RATE LIMITING (429)
+    if (error.response?.status === 429) {
+      const url = config.url || "";
+      const attempts = (retryAttempts.get(url) || 0) + 1;
+
+      console.warn(`⏱️ Rate limited! Attempt ${attempts}`);
+
+      if (attempts < defaultRetryConfig.maxRetries) {
+        // Calculate wait time with exponential backoff
+        const waitTime =
+          defaultRetryConfig.delayMs *
+          Math.pow(defaultRetryConfig.backoffMultiplier, attempts - 1);
+
+        const retryAfterHeader = error.response.headers["Retry-After"];
+        const actualWaitTime = retryAfterHeader
+          ? parseInt(retryAfterHeader as string) * 1000
+          : waitTime;
+
+        console.log(`⏳ Waiting ${actualWaitTime}ms before retry...`);
+
+        // Wait before retry
+        await new Promise((resolve) => setTimeout(resolve, actualWaitTime));
+
+        // Store retry attempt
+        retryAttempts.set(url, attempts);
+
+        // Retry the request
+        return apiClient.request(config);
+      } else {
+        console.error("❌ Max retries exceeded for rate limit");
+        retryAttempts.delete(url);
+        return Promise.reject(error);
+      }
+    }
+
+    // ✅ LOG ALL OTHER ERRORS
+    console.error("❌ API Error:");
+    console.error("   Status:", error.response?.status);
+    console.error("   Message:", error.message);
+    if (error.response?.data) {
+      console.error("   Data:", error.response.data);
+    }
+    return Promise.reject(error);
+  }
+);
+
+// ============================================================================
+// ✅ NEW: Helper function to extract security error code
+// ============================================================================
+
+function extractSecurityErrorCode(errorData: any): string | null {
+  // Check for error code field
+  if (errorData?.code && SECURITY_ERROR_MAP[errorData.code]) {
+    return errorData.code;
+  }
+
+  // Check details array
+  if (errorData?.details && Array.isArray(errorData.details)) {
+    for (const detail of errorData.details) {
+      if (detail.error && SECURITY_ERROR_MAP[detail.error]) {
+        return detail.error;
+      }
+    }
+  }
+
+  return null;
+}
+
 export const analysisService = {
   async processAnalysis(
     files: File[],
@@ -170,19 +316,62 @@ export const analysisService = {
       console.error("❌ Analysis failed");
       console.error("   Error:", error);
 
-      // Parse error response
+      // ✅ ENHANCED: Extract error response from backend
       const errorData = error.response?.data;
-      const errorMessage =
+      const securityErrorCode = extractSecurityErrorCode(errorData);
+
+      // ✅ IF IT'S A SECURITY ERROR, USE MAPPED MESSAGE
+      if (securityErrorCode) {
+        const errorInfo = SECURITY_ERROR_MAP[securityErrorCode];
+        console.error(
+          `   Security Error [${securityErrorCode}]:`,
+          errorInfo.message
+        );
+
+        // ✅ FIX: ATTACH ERROR CODE TO ERROR OBJECT
+        const errorObj: ErrorWithCode = new Error(errorInfo.message);
+        errorObj.code = securityErrorCode;
+        throw errorObj;
+      }
+
+      let errorMessage =
         errorData?.message ||
         errorData?.error ||
         error.message ||
         "Analysis failed. Please try again.";
 
+      console.error("   Data:", errorData);
+
+      // ✅ If backend returned validation details, extract first one
+      if (
+        errorData?.details &&
+        Array.isArray(errorData.details) &&
+        errorData.details.length > 0
+      ) {
+        const firstError = errorData.details[0];
+        errorMessage = firstError.message || firstError.error || errorMessage;
+        console.error("   Extracted from details:", errorMessage);
+      }
+
+      // ✅ If backend has validation_details, use that
+      if (
+        errorData?.validation_details &&
+        Array.isArray(errorData.validation_details) &&
+        errorData.validation_details.length > 0
+      ) {
+        const firstValidation = errorData.validation_details[0];
+        errorMessage =
+          firstValidation.description || firstValidation.reason || errorMessage;
+        console.error("   Extracted from validation_details:", errorMessage);
+      }
+
       if (error.response?.status === 400) {
         console.error("   Bad Request:", errorData?.details);
         throw new Error(errorMessage);
       } else if (error.response?.status === 413) {
-        throw new Error("Files too large. Please use files under 50MB.");
+        throw new Error("📦 Files too large. Please use files under 50MB.");
+      } else if (error.response?.status === 429) {
+        throw new Error("⏱️ Rate limited. Please wait before trying again.");
       } else if (error.code === "ECONNREFUSED") {
         throw new Error(
           "Cannot connect to Cloud Function. Check the URL: " +

@@ -511,17 +511,17 @@ const showValidationSummary = computed(() => {
 
 onMounted(() => {
   if (!analysisData.value) {
-    console.warn("No analysis data found");
+    console.warn("No analysis data found - redirecting to new analysis");
     console.log("=== ANALYSIS DATA ===");
     console.log("Full result:", analysisData.value);
-    console.log("Key Metrics:", analysisData.value.keyMetrics);
-    console.log("Risk Assessment:", analysisData.value.riskAssessment);
-    console.log("Summary Content:", analysisData.value.summaryContent);
+    // console.log("Key Metrics:", analysisData.value.keyMetrics);
+    // console.log("Risk Assessment:", analysisData.value.riskAssessment);
+    // console.log("Summary Content:", analysisData.value.summaryContent);
     console.log("Validation Issues:", analysisStore.validationSummary);
     console.log("Completeness:", analysisStore.analysisCompleteness);
     setTimeout(() => {
-      router.push("/app/new-analysis");
-    }, 2000);
+      router.push("/");
+    }, 100);
   }
 });
 

@@ -60,6 +60,7 @@ interface AnalysisResult {
 export const useAnalysisStore = defineStore("analysis", {
   state: () => ({
     isLoading: false,
+    currentRequestId: null as string | null,
     analysisResult: null as AnalysisResult | null,
     selectedCategory: "technology" as string,
     error: null as string | null,
@@ -101,6 +102,14 @@ export const useAnalysisStore = defineStore("analysis", {
       },
     ] as ProcessingStep[],
     currentStep: 0,
+    isRateLimited: false,
+    rateLimitRetryIn: 0, // seconds
+    securityValidationErrors: [] as Array<{
+      code: string;
+      message: string;
+      icon: string;
+    }>,
+    isRetrying: false,
   }),
 
   actions: {
@@ -115,6 +124,9 @@ export const useAnalysisStore = defineStore("analysis", {
       this.analysisResult = null;
       this.validationSummary = [];
       this.partialAnalysis = false;
+      this.securityValidationErrors = []; // ✅ CLEAR PREVIOUS ERRORS
+      this.isRateLimited = false;
+      this.isRetrying = false;
 
       this.processingSteps.forEach((step) => {
         step.status = "pending";
@@ -135,19 +147,44 @@ export const useAnalysisStore = defineStore("analysis", {
 
         console.log("📊 Analysis result received:", result);
 
+        // Store request_id for progress tracking
+        if (result && (result as any).request_id) {
+          this.currentRequestId = (result as any).request_id;
+          console.log("📊 Request ID stored:", this.currentRequestId);
+        }
+
         // DO NOT VALIDATE STRUCTURE - JUST SANITIZE
         const sanitized = this.sanitizeResponse(result);
 
+        console.log("📈 Setting analysisResult:", sanitized);
         this.analysisResult = sanitized;
+
+        console.log("🛑 Setting isLoading to FALSE (CRITICAL)");
         this.isLoading = false;
+
+        console.log("🔄 Setting progress to 100");
         this.progress = 100;
 
+        console.log("✅ STATE CHECK:");
+        console.log("   isLoading:", this.isLoading);
+        console.log("   analysisResult:", !!this.analysisResult);
+        console.log("   error:", this.error);
         this.processingSteps.forEach((step) => {
           step.status = "completed";
         });
 
         return sanitized;
       } catch (error: unknown) {
+        // ✅ NEW: Check if it's a rate limit error
+        if (error instanceof Error && error.message.includes("⏱️")) {
+          this.handleRateLimit(60);
+          this.recordSecurityValidationError(
+            "RATE_LIMITED",
+            "Too many requests. Please wait before trying again.",
+            "⏱️"
+          );
+        }
+
         this.handleAnalysisError(error);
         throw error;
       }
@@ -354,101 +391,139 @@ export const useAnalysisStore = defineStore("analysis", {
     getCompetitiveAnalysisData() {
       const analysis = this.analysisResult;
 
+      console.log("=== COMPETITIVE ANALYSIS DEBUG ===");
+      console.log("competitiveAnalysis data:", analysis?.competitiveAnalysis);
+
+      // ✅ If real data exists from Gemini
       if (
-        !analysis?.competitiveAnalysis ||
-        analysis.competitiveAnalysis.length === 0
+        analysis?.competitiveAnalysis &&
+        analysis.competitiveAnalysis.length > 0
       ) {
-        return [
-          { company: "Target Company", revenue: 1.5 },
-          { company: "Competitor A", revenue: 2.0 },
-          { company: "Competitor B", revenue: 2.8 },
-          { company: "Competitor C", revenue: 1.8 },
-          { company: "Market Leader", revenue: 5.0 },
-        ];
+        console.log("✅ Using REAL competitive data from Gemini");
+
+        const realData = analysis.competitiveAnalysis.map(
+          (comp: any, index: number) => ({
+            company: comp.competitor || `Company ${index + 1}`,
+            revenue: parseFloat(
+              (comp.marketShare as string)?.replace(/\D/g, "") ||
+                (Math.random() * 5).toFixed(1)
+            ),
+          })
+        );
+
+        console.log("Real data:", realData);
+        return realData;
       }
 
-      return analysis.competitiveAnalysis.map((comp: any, index: number) => ({
-        company: comp.competitor || `Competitor ${index + 1}`,
-        revenue: parseFloat(
-          (comp.marketShare as string)?.replace(/\D/g, "") ||
-            (2 + Math.random() * 3).toFixed(1)
-        ),
-      }));
+      // ❌ If NO data from Gemini - return EMPTY with message
+      console.log("⚠️ No competitive data - returning empty array");
+      return [];
     },
 
     getMarketGrowthData() {
       const analysis = this.analysisResult;
 
-      const baseData = [
-        { year: 2020, value: 10 },
-        { year: 2021, value: 15 },
-        { year: 2022, value: 22 },
-        { year: 2023, value: 32 },
-        { year: 2024, value: 42 },
-        { year: 2025, value: 48 },
-        { year: 2026, value: 50 },
-        { year: 2027, value: 52 },
-      ];
+      console.log("=== MARKET GROWTH DEBUG ===");
+      console.log("marketOpportunity:", analysis?.marketOpportunity);
+      console.log("TAM:", analysis?.marketOpportunity?.TAM);
 
+      // ✅ If TAM exists from Gemini, use it
       if (analysis?.marketOpportunity?.TAM) {
         const tam = analysis.marketOpportunity.TAM as string;
-        const tamValue = parseFloat(tam.replace(/\D/g, ""));
+        console.log("TAM string:", tam);
 
-        if (!isNaN(tamValue)) {
+        const tamValue = parseFloat(tam.replace(/\D/g, ""));
+        console.log("TAM parsed value:", tamValue);
+
+        if (!isNaN(tamValue) && tamValue > 0) {
+          console.log("✅ Using REAL TAM from Gemini");
+
+          const baseData = [
+            { year: 2020, value: 10 },
+            { year: 2021, value: 15 },
+            { year: 2022, value: 22 },
+            { year: 2023, value: 32 },
+            { year: 2024, value: 42 },
+            { year: 2025, value: 48 },
+            { year: 2026, value: 50 },
+            { year: 2027, value: 52 },
+          ];
+
           const scaleFactor = tamValue / baseData[baseData.length - 1].value;
-          return baseData.map((d) => ({
+          const scaledData = baseData.map((d) => ({
             ...d,
             value: Math.round((d.value * scaleFactor) / 1000) * 1000,
           }));
+
+          console.log("Scaled data:", scaledData);
+          return scaledData;
         }
       }
-
-      return baseData;
+      console.log("⚠️ No market growth data - returning empty array");
+      return [];
     },
 
+    // ============================================================================
+    // FINANCIAL PROJECTIONS - Show real data OR empty
+    // ============================================================================
     getFinancialProjectionsData() {
       const analysis = this.analysisResult;
 
+      console.log("=== FINANCIAL PROJECTIONS DEBUG ===");
+      console.log("financialProjections:", analysis?.financialProjections);
+
+      // ✅ If real projections exist from Gemini
       if (
         analysis?.financialProjections &&
         analysis.financialProjections.length > 0
       ) {
-        return analysis.financialProjections.map((proj: any) => ({
-          year: proj.year || "Year",
-          revenue: parseFloat(
-            (proj.revenue as string)?.replace(/\D/g, "") || "0"
-          ),
-          expenses: parseFloat(
-            (proj.expenses as string)?.replace(/\D/g, "") || "0"
-          ),
-          margins: parseFloat(
-            (proj.margins as string)?.replace(/\D/g, "") || "0"
-          ),
-        }));
+        console.log("✅ Using REAL financial projections from Gemini");
+
+        const realProjections = analysis.financialProjections
+          .map((proj: any) => {
+            const revenue = parseFloat(
+              (proj.revenue as string)?.replace(/\D/g, "") || "0"
+            );
+            const expenses = parseFloat(
+              (proj.expenses as string)?.replace(/\D/g, "") || "0"
+            );
+            const margins = parseFloat(
+              (proj.margins as string)?.replace(/\D/g, "") || "0"
+            );
+
+            console.log(`Year ${proj.year}:`, { revenue, expenses, margins });
+
+            return {
+              year: proj.year || "Year",
+              revenue: revenue || 0,
+              expenses: expenses || 0,
+              margins: margins || 0,
+            };
+          })
+          .filter((p: any) => p.revenue > 0); // Only include if has revenue data
+
+        if (realProjections.length > 0) {
+          console.log("Real projections:", realProjections);
+          return realProjections;
+        }
       }
 
-      const projections: any[] = [];
-      let baseRevenue = 100;
-
-      for (let year = 2025; year <= 2029; year++) {
-        const revenue = Math.round(baseRevenue * Math.pow(1.6, year - 2025));
-        const expenses = Math.round(revenue * 0.6);
-        const margin = Math.round(((revenue - expenses) / revenue) * 100);
-
-        projections.push({
-          year: year.toString(),
-          revenue,
-          expenses,
-          margins: margin,
-        });
-      }
-
-      return projections;
+      // ❌ If NO projections from Gemini - return EMPTY array
+      console.log("⚠️ No financial projections - returning empty array");
+      return [];
     },
 
+    // ============================================================================
+    // PERFORMANCE RADAR - Show real risk data OR default scores
+    // ============================================================================
     getPerformanceRadarData(): Record<string, number> {
       const analysis = this.analysisResult;
 
+      console.log("=== PERFORMANCE RADAR DEBUG ===");
+      console.log("riskAssessment:", analysis?.riskAssessment);
+      console.log("recommendation.score:", analysis?.recommendation?.score);
+
+      // Always provide base scores (for radar to work)
       const defaultScores: Record<string, number> = {
         "Team Experience": 75,
         "Competitive Position": 65,
@@ -457,12 +532,18 @@ export const useAnalysisStore = defineStore("analysis", {
         "Financial Health": analysis?.recommendation?.score || 70,
       };
 
+      // ✅ If risk data exists from Gemini, override with it
       if (analysis?.riskAssessment && analysis.riskAssessment.length > 0) {
+        console.log("✅ Using REAL risk data from Gemini");
+
         const riskScores: Record<string, number> = {};
 
         analysis.riskAssessment.forEach((risk: any) => {
+          // Convert risk level to score (high=20, medium=40, low=60)
           const riskPoints =
             risk.level === "high" ? 20 : risk.level === "medium" ? 40 : 60;
+
+          console.log(`Risk: ${risk.type} (${risk.level}) → ${riskPoints}`);
 
           if ((risk.type as string)?.includes("execution")) {
             riskScores["Team Experience"] = Math.min(100, riskPoints);
@@ -478,9 +559,13 @@ export const useAnalysisStore = defineStore("analysis", {
           }
         });
 
-        return { ...defaultScores, ...riskScores };
+        const finalScores = { ...defaultScores, ...riskScores };
+        console.log("Final scores:", finalScores);
+        return finalScores;
       }
 
+      // ⚠️ If NO risk data - use default scores (still shows radar with defaults)
+      console.log("⚠️ No risk assessment - using default scores");
       return defaultScores;
     },
 
@@ -507,6 +592,7 @@ export const useAnalysisStore = defineStore("analysis", {
       this.processingSteps.forEach((step) => {
         step.status = "pending";
       });
+      this.currentRequestId = null;
     },
 
     async checkBackendConnection() {
@@ -585,6 +671,62 @@ export const useAnalysisStore = defineStore("analysis", {
         this.processingSteps[this.currentStep].status = "error";
       }
     },
+
+    clearError() {
+      this.error = null;
+      this.progress = 0;
+      this.progressMessage = "";
+      this.currentStep = 0;
+      this.isLoading = false;
+      this.validationSummary = [];
+      this.partialAnalysis = false;
+      this.analysisCompleteness = 0;
+
+      this.processingSteps.forEach((step) => {
+        step.status = "pending";
+      });
+    },
+    // ✅ NEW: Handle rate limit with countdown
+    handleRateLimit(retryAfterSeconds: number = 60): void {
+      this.isRateLimited = true;
+      this.rateLimitRetryIn = retryAfterSeconds;
+
+      console.log(`⏱️ Rate limited for ${retryAfterSeconds}s`);
+
+      // Countdown timer
+      const interval = setInterval(() => {
+        this.rateLimitRetryIn--;
+
+        if (this.rateLimitRetryIn <= 0) {
+          clearInterval(interval);
+          this.isRateLimited = false;
+          this.isRetrying = false;
+          console.log("✅ Rate limit reset");
+        }
+      }, 1000);
+    },
+
+    // ✅ NEW: Extract and store security errors
+    recordSecurityValidationError(
+      code: string,
+      message: string,
+      icon: string = "❌"
+    ): void {
+      this.securityValidationErrors.push({
+        code,
+        message,
+        icon,
+      });
+
+      this.error = `${icon} ${message}`;
+
+      console.warn(`[${code}] Security validation failed: ${message}`);
+    },
+
+    // ✅ NEW: Clear security errors
+    clearSecurityErrors(): void {
+      this.securityValidationErrors = [];
+    },
   },
 
   getters: {
@@ -602,5 +744,14 @@ export const useAnalysisStore = defineStore("analysis", {
     getAnalysisCompleteness: (state) => state.analysisCompleteness,
 
     isPartialAnalysis: (state) => state.partialAnalysis,
+
+    // ✅ NEW: Get security validation errors
+    getSecurityErrors: (state) => state.securityValidationErrors,
+
+    // ✅ NEW: Check if rate limited
+    isCurrentlyRateLimited: (state) => state.isRateLimited,
+
+    // ✅ NEW: Get retry countdown
+    getRateLimitCountdown: (state) => state.rateLimitRetryIn,
   },
 });
