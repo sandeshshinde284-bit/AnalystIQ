@@ -1,5 +1,9 @@
 <template>
-  <div v-if="showValidationSummary" class="validation-summary-section">
+  <div
+    v-if="showValidationSummary"
+    class="validation-summary-section"
+    :class="completenessClass"
+  >
     <div class="validation-header" @click="expanded = !expanded">
       <div class="header-content">
         <i :class="completenessIcon"></i>
@@ -201,6 +205,12 @@ const completenessIcon = computed(() => {
   return "ri-error-warning-fill critical";
 });
 
+const completenessClass = computed(() => {
+  if (completeness.value < 75) return "completeness-low";
+  if (completeness.value < 90) return "completeness-medium";
+  return "completeness-high";
+});
+
 const completenessMessage = computed(() => {
   if (completeness.value >= 95) {
     return "Excellent - All critical data extracted successfully";
@@ -219,13 +229,35 @@ const completenessMessage = computed(() => {
 $warning-color: #eab308;
 $info-color: #3b82f6;
 $success-color: #22c55e;
+$error-color: #ef4444;
+$accent-color: #00d4ff;
 
 .validation-summary-section {
   background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top: 5px solid rgba(255, 255, 255, 0.1); // ← ADD THIS
   border-radius: 12px;
   margin: 30px 0;
   overflow: hidden;
+  transition: all 0.3s ease;
+
+  // 🔴 RED TOP BAR - INCOMPLETE (< 75%)
+  &.completeness-low {
+    border-top-color: #dc2626;
+    border-color: rgba(220, 38, 38, 0.2);
+  }
+
+  // 🟡 ORANGE TOP BAR - PARTIAL (75-89%)
+  &.completeness-medium {
+    border-top-color: #eab308;
+    border-color: rgba(234, 179, 8, 0.2);
+  }
+
+  // 🟢 GREEN TOP BAR - COMPLETE (90%+)
+  &.completeness-high {
+    border-top-color: #22c55e;
+    border-color: rgba(34, 197, 94, 0.2);
+  }
 }
 
 .validation-header {
@@ -236,6 +268,7 @@ $success-color: #22c55e;
   background: rgba(255, 255, 255, 0.03);
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   cursor: pointer;
+  transition: all 0.3s ease;
 
   &:hover {
     background: rgba(255, 255, 255, 0.05);
@@ -246,19 +279,44 @@ $success-color: #22c55e;
     align-items: center;
     gap: 16px;
 
-    i {
-      font-size: 24px;
+    .icon-wrapper {
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      flex-shrink: 0;
+
+      i {
+        font-size: 24px;
+      }
 
       &.success {
-        color: $success-color;
+        background: rgba($success-color, 0.15);
+        border: 1px solid rgba($success-color, 0.3);
+
+        i {
+          color: $success-color;
+        }
       }
 
       &.warning {
-        color: $warning-color;
+        background: rgba($warning-color, 0.15);
+        border: 1px solid rgba($warning-color, 0.3);
+
+        i {
+          color: $warning-color;
+        }
       }
 
-      &.critical {
-        color: #ef4444;
+      &.error {
+        background: rgba($error-color, 0.15);
+        border: 1px solid rgba($error-color, 0.3);
+
+        i {
+          color: $error-color;
+        }
       }
     }
 
@@ -266,12 +324,36 @@ $success-color: #22c55e;
       margin: 0 0 4px 0;
       color: #ffffff;
       font-size: 1.1em;
+      font-weight: 600;
     }
 
     .subtitle {
       margin: 0;
       color: rgba(255, 255, 255, 0.6);
       font-size: 0.9em;
+    }
+
+    .completeness-badge {
+      margin-left: auto;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.85em;
+      font-weight: 600;
+
+      &.high {
+        background: rgba($success-color, 0.2);
+        color: $success-color;
+      }
+
+      &.medium {
+        background: rgba($warning-color, 0.2);
+        color: $warning-color;
+      }
+
+      &.low {
+        background: rgba($error-color, 0.2);
+        color: $error-color;
+      }
     }
   }
 
@@ -281,10 +363,12 @@ $success-color: #22c55e;
     color: rgba(255, 255, 255, 0.6);
     cursor: pointer;
     font-size: 1.2em;
-    transition: color 0.3s;
+    transition: all 0.3s;
+    padding: 4px 8px;
 
     &:hover {
-      color: rgba(255, 255, 255, 0.9);
+      color: $accent-color;
+      transform: scale(1.1);
     }
   }
 }
@@ -308,34 +392,42 @@ $success-color: #22c55e;
 
 .completeness-section {
   margin-bottom: 32px;
+  padding: 16px;
+  background: rgba($accent-color, 0.05);
+  border-radius: 8px;
+  border-left: 4px solid $accent-color;
 
   .progress-label {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
     font-size: 0.9em;
 
     span {
       color: rgba(255, 255, 255, 0.7);
+      font-weight: 500;
 
       &.value {
-        font-weight: 600;
-        color: #00d4ff;
+        font-weight: 700;
+        font-size: 1.1em;
+        color: $accent-color;
       }
     }
   }
 
   .progress-bar {
-    height: 8px;
+    height: 10px;
     background: rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
+    border-radius: 6px;
     overflow: hidden;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
 
     .progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, #00d4ff, #0099ff);
+      background: linear-gradient(90deg, $accent-color, #0099ff);
       transition: width 0.5s ease;
+      box-shadow: 0 0 10px rgba($accent-color, 0.3);
     }
   }
 
@@ -343,6 +435,7 @@ $success-color: #22c55e;
     margin: 0;
     font-size: 0.85em;
     color: rgba(255, 255, 255, 0.6);
+    font-style: italic;
   }
 }
 
@@ -356,19 +449,27 @@ $success-color: #22c55e;
   .issue-group-title {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     margin: 0 0 12px 0;
     font-size: 0.95em;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid;
+
+    i {
+      font-size: 1.2em;
+    }
 
     &.warning {
       color: $warning-color;
+      border-bottom-color: rgba($warning-color, 0.3);
     }
 
     &.info {
       color: $info-color;
+      border-bottom-color: rgba($info-color, 0.3);
     }
   }
 }
@@ -376,32 +477,54 @@ $success-color: #22c55e;
 .issues-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .issue-item {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border-left: 3px solid;
-  border-radius: 6px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 4px solid;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    transform: translateX(4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
 
   &.warning {
     border-left-color: $warning-color;
-    background: rgba(234, 179, 8, 0.05);
+    background: rgba($warning-color, 0.08);
+
+    &:hover {
+      background: rgba($warning-color, 0.12);
+      border-left-color: rgba($warning-color, 0.8);
+    }
   }
 
   &.info {
     border-left-color: $info-color;
-    background: rgba(59, 130, 246, 0.05);
+    background: rgba($info-color, 0.08);
+
+    &:hover {
+      background: rgba($info-color, 0.12);
+      border-left-color: rgba($info-color, 0.8);
+    }
   }
 
   .issue-icon {
     flex-shrink: 0;
     font-size: 1.2em;
-    margin-top: 2px;
+    margin-top: 3px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 
     i {
       color: currentColor;
@@ -414,50 +537,78 @@ $success-color: #22c55e;
 
     strong {
       display: block;
-      color: rgba(255, 255, 255, 0.9);
-      font-size: 0.9em;
+      color: rgba(255, 255, 255, 0.95);
+      font-size: 0.95em;
       margin-bottom: 4px;
+      font-weight: 600;
     }
 
     p {
       margin: 0;
-      color: rgba(255, 255, 255, 0.7);
+      color: rgba(255, 255, 255, 0.75);
       font-size: 0.85em;
-      line-height: 1.4;
+      line-height: 1.5;
     }
   }
 }
 
 .no-issues {
   text-align: center;
-  padding: 20px;
-  background: rgba(34, 197, 94, 0.05);
-  border: 1px solid rgba(34, 197, 94, 0.2);
-  border-radius: 8px;
+  padding: 24px;
+  background: linear-gradient(
+    135deg,
+    rgba($success-color, 0.08),
+    rgba($success-color, 0.04)
+  );
+  border: 2px solid rgba($success-color, 0.2);
+  border-radius: 12px;
 
   i {
     display: block;
-    font-size: 2em;
+    font-size: 2.5em;
     color: $success-color;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
+    animation: bounce 2s infinite;
   }
 
   p {
     margin: 0;
     color: $success-color;
-    font-weight: 500;
+    font-weight: 600;
+    font-size: 0.95em;
+  }
+}
+
+@keyframes bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-4px);
   }
 }
 
 .recommendations-section {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  margin-top: 24px;
+  padding: 16px;
+  background: rgba($accent-color, 0.05);
+  border-radius: 8px;
+  border-left: 4px solid $accent-color;
 
   h4 {
     margin: 0 0 12px 0;
-    color: #ffffff;
+    color: $accent-color;
     font-size: 0.95em;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    i {
+      font-size: 1.1em;
+    }
   }
 
   .recommendations-list {
@@ -466,23 +617,30 @@ $success-color: #22c55e;
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
 
     li {
       display: flex;
       align-items: flex-start;
       gap: 10px;
-      padding: 10px;
+      padding: 12px;
       background: rgba(255, 255, 255, 0.02);
       border-radius: 6px;
-      color: rgba(255, 255, 255, 0.7);
+      color: rgba(255, 255, 255, 0.75);
       font-size: 0.9em;
       line-height: 1.5;
+      transition: all 0.3s ease;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.05);
+        transform: translateX(4px);
+      }
 
       i {
         flex-shrink: 0;
-        color: #00d4ff;
-        margin-top: 2px;
+        color: $accent-color;
+        margin-top: 3px;
+        font-weight: bold;
       }
 
       span {
@@ -498,6 +656,15 @@ $success-color: #22c55e;
     align-items: flex-start;
     gap: 12px;
 
+    .header-content {
+      width: 100%;
+
+      .completeness-badge {
+        margin-left: 0;
+        margin-top: 8px;
+      }
+    }
+
     .collapse-btn {
       align-self: flex-end;
     }
@@ -508,7 +675,11 @@ $success-color: #22c55e;
   }
 
   .issue-item {
-    flex-direction: column;
+    flex-direction: row;
+
+    &:hover {
+      transform: translateX(2px);
+    }
   }
 }
 </style>

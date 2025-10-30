@@ -31,6 +31,14 @@
           <i class="ri-download-line"></i>
           📄 Print & Download as PDF
         </button>
+        <button
+          class="export-btn primary"
+          @click="handleExportMemo"
+          style="margin-left: 12px"
+        >
+          <i class="ri-file-pdf-line"></i>
+          📋 Export Memo
+        </button>
       </div>
       <ValidationSummary v-if="showValidationSummary" />
       <!-- Recommendation Box -->
@@ -95,6 +103,343 @@
           <div class="summary-section">
             <h3>Product & Technology</h3>
             <p>{{ analysisData.summaryContent.productTech }}</p>
+          </div>
+          <!-- 🆕 ENHANCED PUBLIC DATA SECTION -->
+          <div class="summary-section public-data-section" v-if="hasPublicData">
+            <h3>🌐 Public Data & Market Intelligence</h3>
+            <p class="section-intro">
+              Real-time data gathered from web sources to validate claims and
+              provide market context
+            </p>
+
+            <!-- GitHub Profiles -->
+            <div v-if="hasGitHubData" class="public-data-group">
+              <PublicDataCard
+                title="GitHub Developer Activity"
+                subtitle="Source code repositories and contributions"
+                icon="ri-github-fill"
+                iconColor="#6366f1"
+                iconBg="rgba(99, 102, 241, 0.1)"
+                cardType="github"
+                badge="Verified"
+                badgeType="verified"
+              >
+                <div class="github-profiles-grid">
+                  <div
+                    v-for="(profile, idx) in publicData.github_profiles"
+                    :key="idx"
+                    class="github-profile-card"
+                  >
+                    <a
+                      v-if="profile.url"
+                      :href="profile.url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="profile-link"
+                    >
+                      <div class="profile-header">
+                        <div class="profile-avatar">
+                          <i class="ri-user-line"></i>
+                        </div>
+                        <div class="profile-info">
+                          <h5>{{ profile.name || "Developer" }}</h5>
+                          <span class="username"
+                            >@{{ profile.username || "unknown" }}</span
+                          >
+                        </div>
+                      </div>
+
+                      <div v-if="profile.stats" class="profile-stats">
+                        <div v-if="profile.stats.repos" class="stat-item">
+                          <i class="ri-git-repository-line"></i>
+                          <span>{{ profile.stats.repos }} repos</span>
+                        </div>
+                        <div v-if="profile.stats.followers" class="stat-item">
+                          <i class="ri-user-follow-line"></i>
+                          <span>{{ profile.stats.followers }} followers</span>
+                        </div>
+                        <div
+                          v-if="profile.stats.contributions"
+                          class="stat-item"
+                        >
+                          <i class="ri-git-commit-line"></i>
+                          <span
+                            >{{
+                              profile.stats.contributions
+                            }}
+                            contributions</span
+                          >
+                        </div>
+                      </div>
+
+                      <div v-if="profile.bio" class="profile-bio">
+                        {{ profile.bio }}
+                      </div>
+                    </a>
+                  </div>
+                </div>
+              </PublicDataCard>
+            </div>
+
+            <!-- News & Press -->
+            <div v-if="hasNewsData" class="public-data-group">
+              <PublicDataCard
+                title="News & Press Coverage"
+                :subtitle="`${publicData.news.length} recent articles found`"
+                icon="ri-newspaper-fill"
+                iconColor="#3b82f6"
+                iconBg="rgba(59, 130, 246, 0.1)"
+                cardType="news"
+                badge="Recent"
+                badgeType="new"
+              >
+                <div class="news-grid">
+                  <NewsArticleCard
+                    v-for="(article, idx) in publicData.news.slice(0, 6)"
+                    :key="idx"
+                    :article="article"
+                  />
+                </div>
+              </PublicDataCard>
+            </div>
+
+            <!-- Company Information -->
+            <div v-if="hasCompanyInfo" class="public-data-group">
+              <PublicDataCard
+                title="Company Information"
+                subtitle="Verified company details"
+                icon="ri-building-fill"
+                iconColor="#00d4ff"
+                iconBg="rgba(0, 212, 255, 0.1)"
+                cardType="company"
+              >
+                <div class="company-info-grid">
+                  <div v-if="publicData.company_info.website" class="info-item">
+                    <div class="info-label">
+                      <i class="ri-global-line"></i>
+                      Website
+                    </div>
+                    <a
+                      :href="publicData.company_info.website"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="info-value link"
+                    >
+                      {{ publicData.company_info.website }}
+                      <i class="ri-external-link-line"></i>
+                    </a>
+                  </div>
+
+                  <div v-if="publicData.company_info.founded" class="info-item">
+                    <div class="info-label">
+                      <i class="ri-calendar-line"></i>
+                      Founded
+                    </div>
+                    <div class="info-value">
+                      {{ publicData.company_info.founded }}
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="publicData.company_info.location"
+                    class="info-item"
+                  >
+                    <div class="info-label">
+                      <i class="ri-map-pin-line"></i>
+                      Location
+                    </div>
+                    <div class="info-value">
+                      {{ publicData.company_info.location }}
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="publicData.company_info.employees"
+                    class="info-item"
+                  >
+                    <div class="info-label">
+                      <i class="ri-team-line"></i>
+                      Team Size
+                    </div>
+                    <div class="info-value">
+                      {{ publicData.company_info.employees }}
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="publicData.company_info.description"
+                    class="info-item full-width"
+                  >
+                    <div class="info-label">
+                      <i class="ri-information-line"></i>
+                      Description
+                    </div>
+                    <div class="info-value description">
+                      {{ publicData.company_info.description }}
+                    </div>
+                  </div>
+                </div>
+              </PublicDataCard>
+            </div>
+
+            <!-- Funding Profile -->
+            <div v-if="hasFundingData" class="public-data-group">
+              <PublicDataCard
+                title="Funding & Investment Profile"
+                subtitle="Market conditions and funding trends"
+                icon="ri-funds-fill"
+                iconColor="#22c55e"
+                iconBg="rgba(34, 197, 94, 0.1)"
+                cardType="funding"
+              >
+                <div class="funding-profile-grid">
+                  <div
+                    v-if="publicData.funding_profile.stage"
+                    class="funding-item"
+                  >
+                    <div class="funding-label">Funding Stage</div>
+                    <div class="funding-value highlight">
+                      {{ publicData.funding_profile.stage }}
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="publicData.funding_profile.typical_check_size"
+                    class="funding-item"
+                  >
+                    <div class="funding-label">Typical Check Size</div>
+                    <div class="funding-value">
+                      {{ publicData.funding_profile.typical_check_size }}
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="publicData.funding_profile.market_conditions"
+                    class="funding-item"
+                  >
+                    <div class="funding-label">Market Conditions</div>
+                    <div class="funding-value">
+                      {{ publicData.funding_profile.market_conditions }}
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="publicData.funding_profile.investor_appetite"
+                    class="funding-item"
+                  >
+                    <div class="funding-label">Investor Appetite</div>
+                    <div class="funding-value">
+                      {{ publicData.funding_profile.investor_appetite }}
+                    </div>
+                  </div>
+                </div>
+              </PublicDataCard>
+            </div>
+
+            <!-- Social Proof -->
+            <div v-if="hasSocialProof" class="public-data-group">
+              <PublicDataCard
+                title="Social Proof & Recognition"
+                subtitle="Awards, partnerships, and achievements"
+                icon="ri-award-fill"
+                iconColor="#a855f7"
+                iconBg="rgba(168, 85, 247, 0.1)"
+                cardType="social"
+              >
+                <div class="social-proof-list">
+                  <div v-if="publicData.social_proof.awards" class="proof-item">
+                    <div class="proof-icon">
+                      <i class="ri-trophy-line"></i>
+                    </div>
+                    <div class="proof-content">
+                      <strong>Awards & Recognition</strong>
+                      <p>{{ publicData.social_proof.awards }}</p>
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="publicData.social_proof.partnerships"
+                    class="proof-item"
+                  >
+                    <div class="proof-icon">
+                      <i class="ri-links-line"></i>
+                    </div>
+                    <div class="proof-content">
+                      <strong>Strategic Partnerships</strong>
+                      <p>{{ publicData.social_proof.partnerships }}</p>
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="publicData.social_proof.media_mentions"
+                    class="proof-item"
+                  >
+                    <div class="proof-icon">
+                      <i class="ri-newspaper-line"></i>
+                    </div>
+                    <div class="proof-content">
+                      <strong>Media Coverage</strong>
+                      <p>{{ publicData.social_proof.media_mentions }}</p>
+                    </div>
+                  </div>
+                </div>
+              </PublicDataCard>
+            </div>
+
+            <!-- Market Intelligence -->
+            <div v-if="hasMarketData" class="public-data-group">
+              <PublicDataCard
+                title="Market Intelligence"
+                subtitle="Industry trends and market momentum"
+                icon="ri-line-chart-fill"
+                iconColor="#f59e0b"
+                iconBg="rgba(245, 158, 11, 0.1)"
+                cardType="market"
+                badge="Trending"
+                badgeType="trending"
+              >
+                <div class="market-data-list">
+                  <div
+                    v-if="publicData.market_data.sector_momentum"
+                    class="market-item"
+                  >
+                    <div class="market-label">
+                      <i class="ri-rocket-line"></i>
+                      Sector Momentum
+                    </div>
+                    <div class="market-value">
+                      {{ publicData.market_data.sector_momentum }}
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="publicData.market_data.market_trends"
+                    class="market-item"
+                  >
+                    <div class="market-label">
+                      <i class="ri-stock-line"></i>
+                      Current Trends
+                    </div>
+                    <div class="market-value">
+                      {{ publicData.market_data.market_trends }}
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="publicData.market_data.competitive_landscape"
+                    class="market-item"
+                  >
+                    <div class="market-label">
+                      <i class="ri-focus-3-line"></i>
+                      Competitive Landscape
+                    </div>
+                    <div class="market-value">
+                      {{ publicData.market_data.competitive_landscape }}
+                    </div>
+                  </div>
+                </div>
+              </PublicDataCard>
+            </div>
           </div>
 
           <!-- Key Metrics with Context -->
@@ -339,34 +684,114 @@
 
         <!-- TRACTION TAB -->
         <div data-tab-pane v-show="activeTab === 'traction'" class="tab-pane">
-          <h3>Traction & Achievements</h3>
-          <div v-if="analysisData.traction" class="traction-section">
-            <div v-if="analysisData.traction.customers" class="traction-item">
-              <h4>Customers</h4>
-              <p>{{ analysisData.traction.customers }}</p>
+          <h3>🚀 Traction & Growth Metrics</h3>
+
+          <div v-if="hasTractionData" class="traction-section-enhanced">
+            <!-- Primary Metrics Grid -->
+            <div class="traction-grid">
+              <TractionMetricCard
+                v-if="analysisData.traction.customers"
+                title="Customer Base"
+                :value="analysisData.traction.customers"
+                icon="ri-team-fill"
+                iconColor="#22c55e"
+                iconBg="rgba(34, 197, 94, 0.1)"
+                metricType="customers"
+                badge="Active"
+                :description="
+                  getCustomerInsight(analysisData.traction.customers)
+                "
+              />
+
+              <TractionMetricCard
+                v-if="analysisData.traction.revenue"
+                title="Revenue"
+                :value="analysisData.traction.revenue"
+                icon="ri-money-dollar-circle-fill"
+                iconColor="#00d4ff"
+                iconBg="rgba(0, 212, 255, 0.1)"
+                metricType="revenue"
+                :growth="extractGrowthRate(analysisData.traction.revenue)"
+                :description="getRevenueInsight(analysisData.traction.revenue)"
+              />
+
+              <TractionMetricCard
+                v-if="analysisData.traction.users"
+                title="User Base"
+                :value="analysisData.traction.users"
+                icon="ri-user-star-fill"
+                iconColor="#a855f7"
+                iconBg="rgba(168, 85, 247, 0.1)"
+                metricType="users"
+                :growth="extractGrowthRate(analysisData.traction.users)"
+                :description="getUserInsight(analysisData.traction.users)"
+              />
+
+              <TractionMetricCard
+                v-if="analysisData.traction.growth_rate"
+                title="Growth Rate"
+                :value="analysisData.traction.growth_rate"
+                icon="ri-line-chart-fill"
+                iconColor="#f59e0b"
+                iconBg="rgba(245, 158, 11, 0.1)"
+                metricType="growth"
+                badge="Trending"
+              />
             </div>
-            <div v-if="analysisData.traction.revenue" class="traction-item">
-              <h4>Revenue</h4>
-              <p>{{ analysisData.traction.revenue }}</p>
+
+            <!-- Secondary Metrics -->
+            <div v-if="hasSecondaryTraction" class="secondary-traction">
+              <h4>
+                <i class="ri-focus-3-line"></i> Additional Traction Signals
+              </h4>
+
+              <div class="secondary-grid">
+                <TractionMetricCard
+                  v-if="analysisData.traction.partnerships"
+                  title="Partnerships & Integrations"
+                  :value="analysisData.traction.partnerships"
+                  icon="ri-links-fill"
+                  iconColor="#3b82f6"
+                  iconBg="rgba(59, 130, 246, 0.1)"
+                  metricType="partnerships"
+                />
+
+                <TractionMetricCard
+                  v-if="analysisData.traction.awards"
+                  title="Awards & Recognition"
+                  :value="analysisData.traction.awards"
+                  icon="ri-award-fill"
+                  iconColor="#eab308"
+                  iconBg="rgba(234, 179, 8, 0.1)"
+                  metricType="awards"
+                />
+
+                <TractionMetricCard
+                  v-if="analysisData.traction.media"
+                  title="Press & Media Coverage"
+                  :value="analysisData.traction.media"
+                  icon="ri-newspaper-fill"
+                  iconColor="#06b6d4"
+                  iconBg="rgba(6, 182, 212, 0.1)"
+                  metricType="awards"
+                />
+              </div>
             </div>
-            <div v-if="analysisData.traction.users" class="traction-item">
-              <h4>Users</h4>
-              <p>{{ analysisData.traction.users }}</p>
-            </div>
-            <div
-              v-if="analysisData.traction.partnerships"
-              class="traction-item"
-            >
-              <h4>Partnerships</h4>
-              <p>{{ analysisData.traction.partnerships }}</p>
-            </div>
-            <div v-if="analysisData.traction.awards" class="traction-item">
-              <h4>Awards & Recognition</h4>
-              <p>{{ analysisData.traction.awards }}</p>
+
+            <!-- Traction Summary -->
+            <div class="traction-summary-card">
+              <h4><i class="ri-lightbulb-line"></i> Traction Analysis</h4>
+              <p>{{ getTractionSummary() }}</p>
             </div>
           </div>
+
           <div v-else class="empty-state">
-            <p>No traction data available</p>
+            <i class="ri-database-2-line"></i>
+            <p>No traction data found in uploaded documents</p>
+            <span class="hint"
+              >Upload documents that include customer counts, revenue figures,
+              user metrics, or growth data</span
+            >
           </div>
         </div>
       </div>
@@ -473,11 +898,115 @@ import { useAnalysisStore } from "@/stores/analysisStore";
 import MarketBenchmarkChart from "../components/Molecules/MarketBenchmarkChart.vue";
 import { getSectorByValue } from "../config/analysisConfig";
 import ValidationSummary from "../components/Molecules/ValidationSummary.vue";
+import TractionMetricCard from "../components/Molecules/TractionMetricCard.vue";
+import PublicDataCard from "../components/Molecules/PublicDataCard.vue";
+import NewsArticleCard from "../components/Molecules/NewsArticleCard.vue";
 
 const router = useRouter();
 const analysisStore = useAnalysisStore();
 
 const analysisData = computed(() => analysisStore.analysisResult);
+
+const publicData = computed(() => {
+  const data = (analysisData.value as any)?.public_data;
+  console.log("🔍 DEBUG: Raw public_data from backend:", data);
+
+  if (!data) {
+    console.log("⚠️ No public_data in response");
+    return {
+      news: [],
+      comprehensive_news: [],
+      github_profiles: [],
+      company_info: {},
+      funding_profile: {},
+      social_proof: {},
+      market_data: {},
+    };
+  }
+
+  const newsArray = data.comprehensive_news || data.news || [];
+  console.log("📰 News array:", newsArray);
+  console.log("📰 News count:", newsArray.length);
+  console.log("📰 First article:", newsArray[0]);
+
+  // ✅ FIX: Map comprehensive_news to news for compatibility
+  return {
+    ...data,
+    news: newsArray,
+    comprehensive_news: newsArray,
+    github_profiles: data.github_profiles || [],
+    company_info: data.company_info || {},
+    funding_profile: data.funding_profile || {},
+    social_proof: data.social_proof || {},
+    market_data: data.market_data || {},
+  };
+});
+
+// Helper computed properties for public data
+const hasPublicData = computed(() => {
+  return (
+    hasGitHubData.value ||
+    hasNewsData.value ||
+    hasCompanyInfo.value ||
+    hasFundingData.value ||
+    hasSocialProof.value ||
+    hasMarketData.value
+  );
+});
+
+const hasGitHubData = computed(() => {
+  return (
+    publicData.value.github_profiles &&
+    Array.isArray(publicData.value.github_profiles) &&
+    publicData.value.github_profiles.length > 0
+  );
+});
+
+const hasNewsData = computed(() => {
+  const newsArray = publicData.value.news || [];
+
+  console.log("🔍 hasNewsData check:");
+  console.log("  - news array:", newsArray);
+  console.log("  - is array:", Array.isArray(newsArray));
+  console.log("  - length:", newsArray.length);
+
+  const result = Array.isArray(newsArray) && newsArray.length > 0;
+  console.log("  - RESULT:", result);
+
+  return result;
+});
+
+const hasCompanyInfo = computed(() => {
+  const info = publicData.value.company_info;
+  if (!info) return false;
+  return Object.values(info).some(
+    (val) => val && val !== "Not available" && val !== "N/A"
+  );
+});
+
+const hasFundingData = computed(() => {
+  const funding = publicData.value.funding_profile;
+  if (!funding) return false;
+  return (
+    Object.keys(funding).length > 0 && Object.values(funding).some((val) => val)
+  );
+});
+
+const hasSocialProof = computed(() => {
+  const social = publicData.value.social_proof;
+  if (!social) return false;
+  return (
+    Object.keys(social).length > 0 && Object.values(social).some((val) => val)
+  );
+});
+
+const hasMarketData = computed(() => {
+  const market = publicData.value.market_data;
+  if (!market) return false;
+  return (
+    Object.keys(market).length > 0 && Object.values(market).some((val) => val)
+  );
+});
 
 const activeTab = ref("summary");
 const showSourceModal = ref(false);
@@ -509,6 +1038,121 @@ const showValidationSummary = computed(() => {
   );
 });
 
+// Helper computed properties for traction
+const hasTractionData = computed(() => {
+  const traction = analysisData.value?.traction;
+  if (!traction) return false;
+
+  return Object.values(traction).some(
+    (value) =>
+      value &&
+      value !== "Not mentioned in document" &&
+      value !== "Not specified in document"
+  );
+});
+
+const hasSecondaryTraction = computed(() => {
+  const traction = analysisData.value?.traction;
+  if (!traction) return false;
+
+  return (
+    (traction.partnerships &&
+      traction.partnerships !== "Not mentioned in document") ||
+    (traction.awards && traction.awards !== "Not mentioned in document") ||
+    (traction.media && traction.media !== "Not mentioned in document")
+  );
+});
+
+// Helper functions for insights
+function getCustomerInsight(customerData: string): string {
+  if (!customerData) return "";
+
+  const lower = customerData.toLowerCase();
+  if (lower.includes("fortune 500") || lower.includes("enterprise")) {
+    return "Strong enterprise presence";
+  }
+  if (lower.includes("growing") || lower.includes("expanding")) {
+    return "Expanding customer base";
+  }
+  return "Established customer relationships";
+}
+
+function getRevenueInsight(revenueData: string): string {
+  if (!revenueData) return "";
+
+  const lower = revenueData.toLowerCase();
+  if (lower.includes("mrr") || lower.includes("arr")) {
+    return "Recurring revenue model";
+  }
+  if (lower.includes("growth") || lower.includes("increase")) {
+    return "Revenue momentum evident";
+  }
+  return "Revenue generation established";
+}
+
+function getUserInsight(userData: string): string {
+  if (!userData) return "";
+
+  const lower = userData.toLowerCase();
+  if (lower.includes("active") || lower.includes("mau")) {
+    return "Strong user engagement";
+  }
+  if (lower.includes("grew") || lower.includes("doubled")) {
+    return "Rapid user growth";
+  }
+  return "Established user base";
+}
+
+function extractGrowthRate(data: string): string | undefined {
+  if (!data) return undefined;
+
+  // Extract growth percentage or rate from the string
+  const growthMatch = data.match(
+    /(\d+(?:\.\d+)?%\s*(?:MoM|YoY|month-over-month|year-over-year))/i
+  );
+  if (growthMatch) {
+    return growthMatch[1];
+  }
+
+  // Extract "doubled", "tripled", etc.
+  if (data.toLowerCase().includes("doubled")) return "100% growth";
+  if (data.toLowerCase().includes("tripled")) return "200% growth";
+
+  return undefined;
+}
+
+function getTractionSummary(): string {
+  const traction = analysisData.value?.traction;
+  if (!traction) return "No traction data available";
+
+  const metrics = [];
+  if (
+    traction.customers &&
+    traction.customers !== "Not mentioned in document"
+  ) {
+    metrics.push("established customer base");
+  }
+  if (traction.revenue && traction.revenue !== "Not mentioned in document") {
+    metrics.push("revenue generation");
+  }
+  if (traction.users && traction.users !== "Not mentioned in document") {
+    metrics.push("active user engagement");
+  }
+  if (
+    traction.growth_rate &&
+    traction.growth_rate !== "Not mentioned in document"
+  ) {
+    metrics.push("documented growth");
+  }
+
+  if (metrics.length === 0) return "Limited traction data available";
+  if (metrics.length === 1) return `Company shows ${metrics[0]}.`;
+  if (metrics.length === 2)
+    return `Company demonstrates ${metrics[0]} and ${metrics[1]}.`;
+
+  return `Company demonstrates strong traction across multiple metrics including ${metrics.slice(0, -1).join(", ")}, and ${metrics[metrics.length - 1]}.`;
+}
+
 onMounted(() => {
   if (!analysisData.value) {
     console.warn("No analysis data found - redirecting to new analysis");
@@ -519,6 +1163,12 @@ onMounted(() => {
     // console.log("Summary Content:", analysisData.value.summaryContent);
     console.log("Validation Issues:", analysisStore.validationSummary);
     console.log("Completeness:", analysisStore.analysisCompleteness);
+    console.log("=== TRACTION DATA DEBUG ===");
+    console.log("Full analysis data:", analysisData.value);
+    console.log("Traction data:", analysisData.value?.traction);
+    console.log("Traction customers:", analysisData.value?.traction?.customers);
+    console.log("Traction revenue:", analysisData.value?.traction?.revenue);
+    console.log("hasTractionData computed:", hasTractionData.value);
     setTimeout(() => {
       router.push("/");
     }, 100);
@@ -646,6 +1296,18 @@ async function handlePrintReport() {
     }, 500);
   } catch (error) {
     console.error("Print failed:", error);
+  }
+}
+
+async function handleExportMemo() {
+  try {
+    console.log("📋 Starting memo export...");
+    await analysisStore.exportAsMemo();
+    console.log("✅ Memo exported successfully!");
+    // Optional: show toast notification here
+  } catch (error: any) {
+    console.error("❌ Export error:", error);
+    alert(`❌ Failed to export memo: ${error.message}`);
   }
 }
 </script>
@@ -1625,6 +2287,559 @@ async function handlePrintReport() {
 
   .modal-content {
     max-width: 90vw;
+  }
+}
+
+// Public Data Styling
+.public-data-card {
+  background: rgba(100, 150, 255, 0.05);
+  border-left: 4px solid #0066cc;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+
+  h4 {
+    color: #0066cc;
+    margin: 0 0 12px 0;
+    font-size: 1.1em;
+    font-weight: 600;
+  }
+}
+
+.news-list {
+  display: grid;
+  gap: 12px;
+}
+
+.news-item {
+  background: white;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 102, 204, 0.2);
+
+  .news-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 6px;
+
+    strong {
+      color: #1a1a1a;
+      font-size: 0.95em;
+      flex: 1;
+    }
+
+    .news-type {
+      background: rgba(0, 102, 204, 0.1);
+      color: #0066cc;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75em;
+      font-weight: 600;
+      text-transform: uppercase;
+      white-space: nowrap;
+      margin-left: 8px;
+    }
+  }
+
+  .news-meta {
+    color: rgba(0, 0, 0, 0.6);
+    font-size: 0.85em;
+    line-height: 1.4;
+  }
+}
+
+.funding-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.funding-item {
+  background: white;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 102, 204, 0.2);
+
+  strong {
+    color: #0066cc;
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.9em;
+  }
+
+  p {
+    color: #333;
+    margin: 0;
+    font-size: 0.9em;
+    line-height: 1.4;
+  }
+}
+
+.proof-item,
+.market-item {
+  background: white;
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border-left: 3px solid #22aa44;
+
+  strong {
+    color: #22aa44;
+    margin-right: 6px;
+  }
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .public-data-card {
+    padding: 12px;
+    margin-bottom: 12px;
+
+    h4 {
+      font-size: 1em;
+    }
+  }
+
+  .funding-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+// Enhanced Traction Section
+.traction-section-enhanced {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.traction-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.secondary-traction {
+  h4 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    color: #ffffff;
+    font-size: 16px;
+
+    i {
+      color: $color-accent;
+    }
+  }
+}
+
+.secondary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.traction-summary-card {
+  background: rgba($color-accent, 0.05);
+  border: 1px solid rgba($color-accent, 0.2);
+  border-radius: 12px;
+  padding: 20px;
+
+  h4 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 12px 0;
+    color: $color-accent;
+    font-size: 16px;
+
+    i {
+      font-size: 18px;
+    }
+  }
+
+  p {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.6;
+  }
+}
+
+@media (max-width: 768px) {
+  .traction-grid,
+  .secondary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+// Enhanced Public Data Section
+.public-data-section {
+  .section-intro {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
+    margin-bottom: 24px;
+    font-style: italic;
+  }
+}
+
+.public-data-group {
+  margin-bottom: 24px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+// GitHub Profiles
+.github-profiles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.github-profile-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+
+  &:hover {
+    border-color: rgba(99, 102, 241, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15);
+  }
+
+  .profile-link {
+    display: block;
+    padding: 16px;
+    text-decoration: none;
+    color: inherit;
+  }
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.profile-avatar {
+  width: 48px;
+  height: 48px;
+  background: rgba(99, 102, 241, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  i {
+    font-size: 24px;
+    color: #6366f1;
+  }
+}
+
+.profile-info {
+  flex: 1;
+  min-width: 0;
+
+  h5 {
+    margin: 0 0 4px 0;
+    font-size: 15px;
+    color: #ffffff;
+    font-weight: 600;
+  }
+
+  .username {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+}
+
+.profile-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+
+  i {
+    color: #6366f1;
+  }
+}
+
+.profile-bio {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+// News Grid
+.news-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+// Company Info
+.company-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.info-item {
+  background: rgba(255, 255, 255, 0.02);
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 212, 255, 0.1);
+
+  &.full-width {
+    grid-column: 1 / -1;
+  }
+
+  &:hover {
+    border-color: rgba(0, 212, 255, 0.3);
+  }
+}
+
+.info-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+  font-weight: 600;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+
+  i {
+    color: $color-accent;
+    font-size: 14px;
+  }
+}
+
+.info-value {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.5;
+
+  &.link {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: $color-accent;
+    text-decoration: none;
+    transition: all 0.3s ease;
+
+    &:hover {
+      color: lighten($color-accent, 10%);
+
+      i {
+        transform: translateX(2px);
+      }
+    }
+
+    i {
+      font-size: 14px;
+      transition: transform 0.3s ease;
+    }
+  }
+
+  &.description {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  &.highlight {
+    color: $color-success;
+    font-weight: 600;
+    font-size: 15px;
+  }
+}
+
+// Funding Profile
+.funding-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.funding-item {
+  background: rgba(34, 197, 94, 0.05);
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  transition: all 0.3s ease;
+
+  &:hover {
+    border-color: rgba(34, 197, 94, 0.4);
+    transform: translateY(-2px);
+  }
+}
+
+.funding-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.funding-value {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.5;
+  font-weight: 500;
+
+  &.highlight {
+    color: $color-success;
+    font-size: 16px;
+    font-weight: 700;
+  }
+}
+
+// Social Proof
+.social-proof-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.proof-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(168, 85, 247, 0.05);
+  border-radius: 8px;
+  border-left: 3px solid #a855f7;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: rgba(168, 85, 247, 0.08);
+    transform: translateX(4px);
+  }
+}
+
+.proof-icon {
+  width: 40px;
+  height: 40px;
+  background: rgba(168, 85, 247, 0.2);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  i {
+    font-size: 20px;
+    color: #a855f7;
+  }
+}
+
+.proof-content {
+  flex: 1;
+
+  strong {
+    display: block;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  p {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+}
+
+// Market Intelligence
+.market-data-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.market-item {
+  background: rgba(245, 158, 11, 0.05);
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  transition: all 0.3s ease;
+
+  &:hover {
+    border-color: rgba(245, 158, 11, 0.4);
+    transform: translateY(-2px);
+  }
+}
+
+.market-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+
+  i {
+    color: #f59e0b;
+    font-size: 16px;
+  }
+}
+
+.market-value {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+}
+
+// Responsive Design
+@media (max-width: 768px) {
+  .github-profiles-grid,
+  .news-grid,
+  .company-info-grid,
+  .funding-profile-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .info-item.full-width {
+    grid-column: 1;
+  }
+
+  .proof-item {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .proof-content {
+    text-align: center;
   }
 }
 </style>
