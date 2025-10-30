@@ -106,6 +106,10 @@ interface AnalysisResponse {
     crossValidationPerformed: boolean;
     processingTime: string;
   };
+
+  memo_pdf_base64: string | null;
+  public_data: any;
+
   // Allow additional fields from Cloud Function
   [key: string]: any;
 }
