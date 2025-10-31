@@ -65,6 +65,9 @@ interface AnalysisResult {
     media?: string;
   };
 
+  call_prep_questions?: string | null;
+  benchmarking?: string | null;
+
   [key: string]: any;
 }
 
@@ -126,7 +129,8 @@ export const useAnalysisStore = defineStore("analysis", {
   actions: {
     async startAnalysis(
       files: File[],
-      category: string = "technology"
+      category: string = "technology",
+      transcriptText: string = ""
     ): Promise<AnalysisResult> {
       this.isLoading = true;
       this.error = null;
@@ -147,13 +151,15 @@ export const useAnalysisStore = defineStore("analysis", {
         console.log(
           "🎯 Starting analysis with files:",
           files.map((f) => f.name),
-          category
+          category,
+          transcriptText
         );
 
         const result = await analysisService.processAnalysis(
           files,
           category,
-          this.updateProgress.bind(this)
+          this.updateProgress.bind(this),
+          transcriptText
         );
 
         console.log("📊 Analysis result received:", result);
@@ -212,8 +218,13 @@ export const useAnalysisStore = defineStore("analysis", {
         category: analysisData.category,
         fileCount: files.length,
         files: files.map((f: File) => f.name),
+        transcriptText: analysisData.transcriptText,
       });
-      return this.startAnalysis(files, analysisData.category);
+      return this.startAnalysis(
+        files,
+        analysisData.category,
+        analysisData.transcriptText || ""
+      );
     },
 
     updateProgress(message: string, progress: number): void {
@@ -383,6 +394,9 @@ export const useAnalysisStore = defineStore("analysis", {
         public_data: (data as any).public_data || null,
 
         traction: data.traction || {},
+
+        call_prep_questions: (data as any).call_prep_questions || null,
+        benchmarking: (data as any).benchmarking || null,
       };
       console.log(
         "VALIDATION SUMMARY STRUCTURE:",

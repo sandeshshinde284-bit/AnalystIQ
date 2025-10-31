@@ -271,7 +271,8 @@ export const analysisService = {
   async processAnalysis(
     files: File[],
     category: string = "technology",
-    progressCallback: ProgressCallback
+    progressCallback: ProgressCallback,
+    transcriptText: string = ""
   ): Promise<AnalysisResponse> {
     const formData = new FormData();
 
@@ -285,6 +286,7 @@ export const analysisService = {
 
     formData.append("category", category);
     formData.append("sector", category);
+    formData.append("transcriptText", transcriptText);
 
     try {
       progressCallback("Uploading documents to Cloud Function...", 5);
