@@ -1051,6 +1051,188 @@ def write_error_to_firestore(request_id: str, error_code: str, error_message: st
         print(f"⚠️  Firestore error write failed: {str(e)}")
 
 
+def generate_call_prep_questions(analysis: dict) -> str:
+    """Generate context-aware questions for founder call"""
+    try:
+        print(f"   → Generating call prep questions...")
+        print(f"   → Analysis keys: {list(analysis.keys())}") 
+        
+        models_to_try = [
+            "gemini-2.0-flash",
+            "gemini-2.5-flash", 
+            "gemini-1.5-flash",
+            "gemini-2.5-pro",
+            "gemini-1.5-pro",
+        ]
+        
+        model = None
+        model_used = None
+
+        for model_name in models_to_try:
+            try:
+                print(f"   → Testing {model_name}...")
+                test_model = GenerativeModel(model_name)
+                test_response = test_model.generate_content(
+                    "test",
+                    generation_config={"max_output_tokens": 2}
+                )
+                model = test_model
+                model_used = model_name
+                print(f"   ✅ Using {model_name}")
+                break
+            except Exception as e:
+                print(f"   ⚠️  {model_name} unavailable: {str(e)[:100]}")
+                continue
+        
+        if not model:
+            raise Exception("No Gemini models available in this region")
+        
+        # Extract key info from analysis
+        company = analysis.get('startupName', 'Company')
+        summary = analysis.get('summaryContent', {})
+        metrics = analysis.get('keyMetrics', [])
+        risks = analysis.get('riskAssessment', [])
+        traction = analysis.get('traction', {})
+        
+        # Build context
+        context = f"""
+Company: {company}
+Business: {summary.get('businessOverview', '')[:200]}
+Team: {summary.get('teamExperience', '')[:200]}
+Key Metrics: {', '.join([m.get('label') for m in metrics[:5]])}
+Top Risks: {', '.join([r.get('title') for r in risks[:3]])}
+Traction: {traction}
+"""
+        
+        prompt = f"""Based on this startup analysis, generate 7-10 specific, context-aware questions 
+for a pre-investment founder call. These should probe deeper into:
+- Claims made in the pitch deck
+- Risks identified in analysis
+- Growth metrics and unit economics
+- Market understanding
+- Team capabilities
+
+Context:
+{context}
+
+Generate questions in this format:
+1. [Question about X that references specific claim from deck]
+2. [Question about Y that probes risk Z]
+...
+
+Each question should reference something specific from the analysis, not generic.
+Start with "Pre-Call Founder Questions:" header."""
+
+        print(f"   → Sending to Gemini...")
+        response = model.generate_content(
+            prompt,
+            generation_config={"max_output_tokens": 1024, "temperature": 0.7}
+        )
+        
+        print(f"   → Response received: {len(response.text)} chars") 
+        
+        questions = response.text if hasattr(response, 'text') else str(response)
+        print(f"   ✓ Generated {len(questions)} characters")
+        return questions
+        
+    except Exception as e:
+        print(f"   ✗ Question generation error: {str(e)}")
+        return "Questions could not be generated. Please review the analysis manually."
+
+
+def add_benchmark_comparison(analysis: dict, sector: str) -> str:
+    try:
+        print(f"   → Adding benchmark comparison...")
+        
+        # ✅ TRY MULTIPLE MODELS (YOUR APPROACH)
+        models_to_try = [
+            "gemini-2.0-flash",
+            "gemini-2.5-flash", 
+            "gemini-1.5-flash",
+            "gemini-2.5-pro",
+            "gemini-1.5-pro",
+        ]
+        
+        model = None
+        model_used = None
+        
+        for model_name in models_to_try:
+            try:
+                print(f"   → Testing {model_name}...")
+                test_model = GenerativeModel(model_name)
+                test_response = test_model.generate_content(
+                    "test",
+                    generation_config={"max_output_tokens": 2}
+                )
+                model = test_model
+                model_used = model_name
+                print(f"   ✅ Using {model_name}")
+                break
+            except Exception as e:
+                print(f"   ⚠️  {model_name} unavailable: {str(e)[:100]}")
+                continue
+        
+        if not model:
+            raise Exception("No Gemini models available in this region")
+        
+        # Get metrics from analysis
+        metrics = analysis.get('keyMetrics', [])
+        market = analysis.get('marketOpportunity', {})
+        stage = analysis.get('stage', 'Seed')
+        traction = analysis.get('traction', {})
+        
+        metrics_text = "\n".join([f"- {m.get('label')}: {m.get('value')}" for m in metrics[:10]])
+        
+        sector_context = {
+            'saas': 'SaaS B2B',
+            'fintech': 'Financial Technology',
+            'healthtech': 'Healthcare Tech',
+            'edtech': 'Education Tech',
+            'ai': 'Artificial Intelligence & Machine Learning',
+            'ecommerce': 'E-Commerce & Direct-to-Consumer',
+            'other': 'Technology'
+        }
+        
+        context_label = sector_context.get(sector, 'Technology')
+        
+        prompt = f"""Compare these startup metrics against {context_label} industry benchmarks:
+
+Stage: {stage}
+Sector: {context_label}
+
+Metrics:
+{metrics_text}
+
+Market: TAM={market.get('TAM', 'N/A')}, Growth={market.get('growthRate', 'N/A')}
+
+Traction: 
+- Revenue: {traction.get('revenue', 'N/A')}
+- Users: {traction.get('users', 'N/A')}
+- Customers: {traction.get('customers', 'N/A')}
+
+For each metric, provide:
+1. Industry Benchmark for {stage} stage {context_label} companies
+2. Assessment: 🟢 Above Average | 🟡 Average | 🔴 Below Average
+3. Implication for investment
+
+Format as a structured comparison table."""
+
+        response = model.generate_content(
+            prompt,
+            generation_config={"max_output_tokens": 1024, "temperature": 0.7}
+        )
+        
+        benchmarking = response.text if hasattr(response, 'text') else str(response)
+        print(f"   ✓ Benchmarking analysis generated ({len(benchmarking)} chars)")
+        return benchmarking
+        
+    except Exception as e:
+        print(f"   ✗ Benchmarking error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return "Benchmarking analysis unavailable."
+
+
 # =============================================================================
 # MAIN CLOUD FUNCTION
 # =============================================================================
@@ -1301,6 +1483,19 @@ def analyze_document(request: Request):
             }
         else:
             extracted_data = all_extracted_data[0]
+            
+
+        # =====================================================================
+        # TRANSCRIPT
+        # =====================================================================    
+        transcript_text = request.form.get('transcriptText', '')  # ✅ NEW
+        if transcript_text:
+            print(f"\n✓ Transcript received: {len(transcript_text)} chars")
+            # APPEND transcript to extracted_data
+            extracted_data['full_text'] = extracted_data.get('full_text', '') + "\n\n[FOUNDER TRANSCRIPT]\n" + transcript_text
+            print(f"✓ Combined text length: {len(extracted_data['full_text'])}")
+
+        # =====================================================================    
         
         print(f"\n✅ Extraction successful")
         print(f"   Pages: {extracted_data.get('page_count')}")
@@ -1370,7 +1565,13 @@ def analyze_document(request: Request):
             "recommendation": {
                 "text": analysis.get("recommendation", {}).get("text", "REVIEW"),
                 "score": int(analysis.get("recommendation", {}).get("score", 0)),
-                "justification": analysis.get("recommendation", {}).get("justification", "")
+                "justification": analysis.get("recommendation", {}).get("justification", ""),
+                "categoryScores": { 
+                    "founder": analysis.get("recommendation", {}).get("founderScore", 75),
+                    "market": analysis.get("recommendation", {}).get("marketScore", 75),
+                    "differentiation": analysis.get("recommendation", {}).get("diffScore", 75),
+                    "team": analysis.get("recommendation", {}).get("teamScore", 75)
+                }
             },
             
             "keyMetrics": analysis.get("keyMetrics", []),
@@ -1442,6 +1643,37 @@ def analyze_document(request: Request):
             traceback.print_exc()
             result['memo_pdf_base64'] = None
 
+        try:
+            print(f"\n   → Generating call prep questions...")
+            call_prep_questions = generate_call_prep_questions(analysis)
+            if call_prep_questions and len(call_prep_questions) > 50:
+                result['call_prep_questions'] = call_prep_questions
+                print(f"✓ Call prep questions added ({len(call_prep_questions)} chars)")
+            else:
+                print(f"✗ Call prep returned empty or too short: {call_prep_questions[:100]}")
+                result['call_prep_questions'] = None
+        except Exception as e:
+            print(f"✗ Call prep error: {type(e).__name__}: {str(e)}")
+            import traceback
+            traceback.print_exc()  # ✅ PRINT FULL STACK TRACE
+            result['call_prep_questions'] = None
+
+        try:
+            print(f"\n   → Adding benchmark comparison...")
+            benchmarking = add_benchmark_comparison(analysis, sector)
+            if benchmarking and len(benchmarking) > 50:
+                result['benchmarking'] = benchmarking
+                print(f"✓ Benchmarking added ({len(benchmarking)} chars)")
+            else:
+                print(f"✗ Benchmarking returned empty or too short: {benchmarking[:100]}")
+                result['benchmarking'] = None
+        except Exception as e:
+            print(f"✗ Benchmarking error: {type(e).__name__}: {str(e)}")
+            import traceback
+            traceback.print_exc()  # ✅ PRINT FULL STACK TRACE
+            result['benchmarking'] = None
+
+
         # 🌐 PUBLIC DATA
         try:
             print(f"\n🌐 Fetching public data...")
@@ -1463,6 +1695,7 @@ def analyze_document(request: Request):
         print(f"\n✅ ANALYSIS COMPLETE")
         print("="*80)
         result['request_id'] = request_id
+
         return (json.dumps(result), 200, cors_headers)
     
     except Exception as e:
@@ -1760,7 +1993,13 @@ def gemini_document_type_check(text: str, business_score: float) -> bool:
         print(f"   → Initializing Gemini for secondary check...")
         
         # Use fastest model available
-        models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash"]
+        models_to_try = [
+            "gemini-2.0-flash",
+            "gemini-2.5-flash", 
+            "gemini-1.5-flash",
+            "gemini-2.5-pro",
+            "gemini-1.5-pro",
+        ]
         model = None
         
         for model_name in models_to_try:
