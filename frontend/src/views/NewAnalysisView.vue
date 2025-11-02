@@ -178,7 +178,7 @@
                 (file: File) => handleFileUpload('pitchDeck', file)
               "
               @change-file="() => changeFile('pitchDeck')"
-              :max-size="30"
+              :max-size="50"
               file-type="Pitch Deck"
             />
             <!-- Inline validation error -->
@@ -561,7 +561,7 @@ const fileValidation: Record<
       "application/vnd.ms-powerpoint",
       "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ],
-    maxSize: 30 * 1024 * 1024,
+    maxSize: 50 * 1024 * 1024,
     extensions: [".pdf", ".ppt", ".pptx"],
   },
   financialModel: {
