@@ -116,6 +116,13 @@ class MultiAgentOrchestrator:
             # ================================================================
             print("\n ✅ Saving to Firestore...")
 
+            # analysis_id = save_analysis_to_firestore(
+            #     user_id=user_id,
+            #     company_name=extracted.get('startupName'),
+            #     extracted_data=extracted,
+            #     mapped_data=mapped
+            # )
+
             analysis_id = str(uuid.uuid4())
             print(f"  ✅ Saved with ID: {analysis_id}")
 
@@ -156,6 +163,25 @@ class MultiAgentOrchestrator:
             pdf_size = memo.get('pdf_size_bytes', 0)
             print(f"   ✅ Complete: {pdf_size/1024:.1f}KB PDF generated")
             
+
+            # print("\n ✅ Updating Firestore with final data...")
+
+            # try:
+            #     db = firestore.client()
+            #     db.collection("analyses").document(analysis_id).update({
+            #         "questions": engagement.get("questions_json", []),
+            #         "call_prep_questions": engagement.get("call_prep_questions", ""),
+            #         "memo_pdf_base64": memo.get("memo_pdf_base64"),
+            #         "public_data": mapped.get("public_data", {}),
+            #         "benchmarking": mapped.get("benchmarking", ""),
+            #         "status": "complete",
+            #         "updatedAt": datetime.now().isoformat()
+            #     })
+            #     print(f"   ✅ Updated with questions & memo")
+            # except Exception as e:
+            #     print(f"   ❌ Update failed (non-blocking): {str(e)}")
+
+
             # ================================================================
             # STORE STATE IN MEMORY
             # ================================================================
@@ -384,6 +410,81 @@ class MultiAgentOrchestrator:
             print(f"      ✅ All {len(expected_fields)} fields present")
         
         return merged
+
+
+def save_analysis_to_firestore(user_id: str, company_name: str, extracted_data: dict, mapped_data: dict) -> str:
+    """
+    Save analysis after Agent 2 completes
+    Returns: analysis_id for use in frontend
+    """
+    
+    try:
+        db = firestore.client()
+        print(f"✅ Firestore client type: {type(db)}")
+        print(f"📝 User ID: {user_id}")
+        print(f"🏢 Company: {company_name}")
+        
+        if not user_id:
+            raise ValueError("❌ user_id is None or empty!")
+
+        company_name = extracted.get('startupName', 'Unknown').replace(' ', '_')[:15]
+        analysis_id = f"{company_name}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        
+        recommendation = mapped_data.get("recommendation", {})
+        
+        analysis_doc = {
+            "userId": user_id,
+            "status": "analysis_complete",
+            "createdAt": datetime.now().isoformat(),
+            
+            "startupName": extracted_data.get("startupName", "Unknown"),
+            "industry": extracted_data.get("industry", ""),
+            "stage": extracted_data.get("stage", ""),
+            
+            "recommendation": {
+                "text": recommendation.get("text", "REVIEW"),
+                "score": int(recommendation.get("score", 50)),
+                "justification": recommendation.get("justification", ""),
+                "categoryScores": {
+                    "founder": recommendation.get("founderScore", 75),
+                    "market": recommendation.get("marketScore", 75),
+                    "differentiation": recommendation.get("diffScore", 75),
+                    "team": recommendation.get("teamScore", 75)
+                }
+            },
+            
+            "keyMetrics": mapped_data.get("keyMetrics", []),
+            "riskAssessment": mapped_data.get("riskAssessment", []),
+            "competitiveAnalysis": mapped_data.get("competitiveAnalysis", []),
+            "crossDocumentInsights": mapped_data.get("crossDocumentInsights", []),
+            
+            "businessOverview": extracted_data.get("summaryContent", {}).get("businessOverview", ""),
+            "teamExperience": extracted_data.get("summaryContent", {}).get("teamExperience", ""),
+            "productTech": extracted_data.get("summaryContent", {}).get("productTech", ""),
+            
+            "marketOpportunity": extracted_data.get("marketOpportunity", {}),
+            "financialProjections": extracted_data.get("financialProjections", []),
+            "valuationInsights": extracted_data.get("valuationInsights", {}),
+            "investmentTerms": extracted_data.get("investmentTerms", {}),
+            "traction": extracted_data.get("traction", {}),
+
+            "public_data": mapped_data.get("public_data", {}),
+            "benchmarking": mapped_data.get("benchmarking", ""),
+            
+            "call_prep_questions": "",
+            "questions": [],
+            "memo_pdf_base64": None,
+            "memo_pdf_filename": "Investment_Memo.pdf"
+        }
+        
+        db.collection("analyses").document(analysis_id).set(analysis_doc)
+        
+        print(f"    Saved to Firestore: {analysis_id}")
+        return analysis_id
+        
+    except Exception as e:
+        print(f"    Save failed: {str(e)}")
+        raise e
 
 def save_complete_analysis_to_firestore(user_id: str, analysis_id: str, final_result: dict) -> str:
     """

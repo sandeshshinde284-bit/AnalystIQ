@@ -1,3 +1,105 @@
+# -*- coding: utf-8 -*-
+"""
+================================================================================
+Investment Analysis Cloud Function (main.py)
+================================================================================
+
+Purpose:
+--------
+This script is a Google Cloud Function that acts as a secure and scalable API 
+endpoint for analyzing investment documents. It is designed to process startup 
+pitch decks, financial models, and other business documents to provide a 
+comprehensive investment analysis, similar to what a venture capital analyst would produce.
+
+Workflow:
+---------
+1.  **Receive Request:** The function listens for HTTPS POST requests containing
+    one or more files (`multipart/form-data`). It also handles CORS preflight
+    requests (`OPTIONS`).
+
+2.  **Validate Files:** Each uploaded file is rigorously validated against a set
+    of criteria:
+    -   File presence, size (max 50MB), and type (PDF, DOCX, etc.).
+    -   Content validity (e.g., is it a business document?).
+
+3.  **Extract Text (Document AI):** The core text extraction is handled by Google
+    Cloud Document AI. The script has intelligent logic to handle documents of
+    any size:
+    -   **Online Processing (Fast):** For smaller documents, it uses the fast,
+        synchronous API.
+        - With OCR (`USE_OCR=True`): Up to 15 pages.
+        - Imageless (`USE_OCR=False`): Up to 30 pages.
+    -   **Batch Processing (Robust):** If a document exceeds the online page limit,
+        the script automatically uploads it to Google Cloud Storage (GCS) and
+        initiates an asynchronous batch job, which can handle up to 500 pages.
+
+4.  **Analyze Content (Vertex AI Gemini):** The extracted text is sent to a 
+    powerful large language model (Gemini) via Vertex AI. The model is given a 
+    detailed prompt instructing it to act as a senior VC analyst and return its
+    findings in a structured JSON format.
+
+5.  **Validate AI Response:** The JSON response from Gemini is validated to ensure
+    it contains all the required fields (e.g., `startupName`, `recommendation`, 
+    `riskAssessment`) before being sent to the client.
+
+6.  **Return Structured Response:** The function returns a comprehensive JSON 
+    object containing the full analysis, metadata about the processed files, 
+    and detailed error messages if any step fails.
+
+Key Technologies Used:
+----------------------
+-   **Google Cloud Functions:** For serverless, scalable execution.
+-   **Google Cloud Document AI:** For high-accuracy text extraction with OCR.
+-   **Google Cloud Vertex AI:** To access and run the Gemini generative model.
+-   **Google Cloud Storage:** As a temporary holding area for large files during
+    batch processing.
+-   **Flask:** As the underlying web framework for handling HTTP requests.
+
+How to Modify:
+--------------
+-   **Project & Processor IDs:** Change `PROJECT_ID`, `LOCATION`, `PROCESSOR_ID`,
+    and bucket names under the `--- CONFIGURATION ---` section to match your
+    Google Cloud setup.
+-   **OCR Setting:** The `USE_OCR` variable is crucial. Set it to `"true"` (default)
+    to analyze scanned documents or PDFs with text in images. Set it to `"false"`
+    for faster processing of purely digital documents.
+-   **Analysis Prompt:** The prompt within the `analyze_investment_opportunity`
+    function can be modified to change the structure or focus of the AI's analysis.
+
+================================================================================
+INVESTMENT ANALYSIS CLOUD FUNCTION (main.py)
+================================================================================
+
+OVERVIEW:
+---------
+Google Cloud Function that analyzes startup pitch decks and business documents
+using OCR (Document AI) and AI (Gemini) to provide venture capital investment
+insights. Handles files up to 500 pages via intelligent online/batch processing.
+
+PROCESSING FLOW:
+----------------
+1. Receive file(s) via multipart/form-data POST request
+2. Validate files (type, size, extension)
+3. Extract text using Document AI with OCR
+   - Online: Up to 15 pages (fast)
+   - Batch: Up to 500 pages (via GCS)
+4. Validate extracted text (minimum length, business keywords)
+5. Analyze with Gemini for VC-style investment analysis
+6. Validate AI response structure
+7. Return comprehensive JSON analysis
+
+KEY FEATURES:
+-------------
+✓ Handles multiple file uploads
+✓ OCR support for image-based PDFs
+✓ Automatic online-to-batch fallback
+✓ GCS cleanup after processing
+✓ Comprehensive error handling
+✓ CORS support for frontend integration
+
+
+================================================================================
+"""
 
 # Import standard and Google Cloud libraries
 import os    # For environment variables
@@ -45,6 +147,31 @@ PROCESSOR_LOCATION = os.getenv("PROCESSOR_LOCATION", "us")
 
 INPUT_BUCKET_NAME = os.getenv("INPUT_BUCKET", "analyst-iq-docai-input")
 OUTPUT_BUCKET_NAME = os.getenv("OUTPUT_BUCKET", "analyst-iq-docai-output")
+
+# # ✅ Initialize with explicit credentials
+# try:
+#     # Check if app already initialized
+#     firebase_admin.get_app()
+#     print("✅ Firebase app already initialized")
+# except ValueError:
+#     # App not initialized, initialize it
+#     firebase_admin.initialize_app(
+#         options={
+#             "projectId": "analyst-iq-5b9e1"
+#         }
+#     )
+#     print("✅ Firebase app initialized")
+
+# # Get client
+# db = firestore.client()
+# print(f"✅ Firestore client obtained")
+
+# try:
+#     test_doc = db.collection("_test").document("_test").get()
+#     print(f"✅ Firestore connection verified - Project: analyst-iq-5b9e1")
+# except Exception as e:
+#     print(f"❌ Firestore connection failed: {str(e)}")    
+
 
 # File validation constants
 ALLOWED_EXTENSIONS = ['pdf', 'txt', 'docx', 'pptx', 'doc', 'ppt']
@@ -752,6 +879,7 @@ def search_startup_comprehensively(startup_name: str, serpapi_key: str) -> dict:
                     
                     print(f"   ✅ Found {len(news_results)} news items")
                     search_count += 1
+                    increment_api_usage('serpapi')
                 
                 elif response.status_code == 401:
                     print(f"   ❌ SerpAPI: Unauthorized (401) - Check API key")
@@ -2741,6 +2869,9 @@ def synthesize_public_data_with_gemini(startup_name: str, analysis: dict) -> dic
             'funding_signals': {},
             'api_usage': {
                 'github': {'used': 0, 'limit': 'unlimited', 'can_call': True},
+                'serpapi': check_api_limits('serpapi'),
+                'newsapi': check_api_limits('newsapi'),
+                'hunter': check_api_limits('hunter')
             },
             'source': 'real_apis',
             'data_quality': {
@@ -2818,6 +2949,7 @@ def synthesize_public_data_with_gemini(startup_name: str, analysis: dict) -> dic
                             })
                         
                         print(f"   ✅ NewsAPI: Found {len(articles)} articles")
+                        increment_api_usage('newsapi')
                     
                     elif response.status_code == 401:
                         print(f"   ❌ NewsAPI: Unauthorized (401)")
@@ -2878,6 +3010,7 @@ def synthesize_public_data_with_gemini(startup_name: str, analysis: dict) -> dic
                         })
                         
                         print(f"   ✅ Hunter.io: Got company details")
+                        increment_api_usage('hunter')
                     
                     elif response.status_code == 404:
                         print(f"   ⚠️ Hunter.io: Domain not found ({domain})")
@@ -2939,6 +3072,90 @@ def initialize_api_usage_tracking():
         print(f"\n 📋 API tracking error (non-critical): {str(e)}")
 
 
+def check_api_limits(api_name: str) -> dict:
+    """Check if API has quota remaining"""
+    try:
+        usage_ref = db.collection('api_usage').document('monthly')
+        usage_doc = usage_ref.get()
+        
+        if not usage_doc.exists:
+            initialize_api_usage_tracking()
+            usage_doc = usage_ref.get()
+        
+        usage_data = usage_doc.to_dict()
+        
+        if api_name == 'serpapi':
+            calls_used = usage_data.get('serpapi_calls', 0)
+            limit = usage_data.get('serpapi_limit', 250)
+            remaining = limit - calls_used
+            buffer = 5  # Keep 5 calls as buffer
+            
+            can_call = remaining > buffer
+            print(f"\n 📋  SerpAPI: {calls_used}/{limit} used, {remaining} remaining, CAN_CALL: {can_call}")
+            
+            return {
+                'can_call': can_call,
+                'used': calls_used,
+                'limit': limit,
+                'remaining': remaining
+            }
+        
+        elif api_name == 'newsapi':
+            calls_used = usage_data.get('newsapi_calls', 0)
+            limit = usage_data.get('newsapi_limit', 2000)
+            remaining = limit - calls_used
+            buffer = 10  # Keep 10 for buffer
+            
+            can_call = remaining > buffer
+            print(f"\n 📋  NewsAPI: {calls_used}/{limit} used, {remaining} remaining, CAN_CALL: {can_call}")
+            
+            return {
+                'can_call': can_call,
+                'used': calls_used,
+                'limit': limit,
+                'remaining': remaining
+            }
+        
+        elif api_name == 'hunter':
+            calls_used = usage_data.get('hunter_calls', 0)
+            limit = usage_data.get('hunter_limit', 60)
+            remaining = limit - calls_used
+            buffer = 2  # Keep 2 for buffer
+            
+            can_call = remaining > buffer
+            print(f"\n 📋  Hunter.io: {calls_used}/{limit} used, {remaining} remaining, CAN_CALL: {can_call}")
+            
+            return {
+                'can_call': can_call,
+                'used': calls_used,
+                'limit': limit,
+                'remaining': remaining
+            }
+        
+        return {'can_call': False, 'error': 'Unknown API'}
+        
+    except Exception as e:
+        print(f"\n 📋 API limit check error: {str(e)}")
+        return {'can_call': False, 'error': str(e)}
+
+
+def increment_api_usage(api_name: str):
+    """Increment API call counter after successful call"""
+    try:
+        usage_ref = db.collection('api_usage').document('monthly')
+        
+        if api_name == 'serpapi':
+            usage_ref.update({'serpapi_calls': firestore.Increment(1)})
+        elif api_name == 'newsapi':
+            usage_ref.update({'newsapi_calls': firestore.Increment(1)})
+        elif api_name == 'hunter':
+            usage_ref.update({'hunter_calls': firestore.Increment(1)})
+        
+        print(f"\n 📋 {api_name} usage incremented")
+    except Exception as e:
+        print(f"\n 📋 Failed to update usage: {str(e)}")         
+
+
 # =============================================================================
 # UTILITY FUNCTIONS
 # =============================================================================
@@ -2998,4 +3215,39 @@ def get_industry_from_sector(sector: str) -> str:
     }
     return sector_map.get(sector, sector.title())
 
- 
+    # =============================================================================
+    # HEALTH CHECK ENDPOINT
+    # =============================================================================
+@functions_framework.http
+def health_check(request: Request):
+    """Health check endpoint for Cloud Function"""
+    
+    # Handle CORS preflight
+    if request.method == 'OPTIONS':
+        headers = get_cors_headers(include_content_type=False)
+        return ('', 204, headers)
+    
+    # Only accept GET requests
+    if request.method != 'GET':
+        headers = get_cors_headers()
+        return (
+            json.dumps({"error": "Method not allowed. Use GET."}),
+            405,
+            headers
+        )
+    
+    cors_headers = get_cors_headers()
+
+    health_result = {
+        "status": "healthy",
+        "service": "AnalystIQ Investment Analysis",
+        "processor_id": PROCESSOR_ID,
+        "project": PROJECT_ID,
+        "location": LOCATION,
+        "version": "1.0-production",
+        "timestamp": datetime.now().isoformat()
+        
+    }
+    
+    print("✅ Health check passed")
+    return (json.dumps(health_result), 200, cors_headers)
