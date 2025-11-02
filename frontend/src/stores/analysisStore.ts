@@ -5,6 +5,7 @@ import {
   type ProgressCallback,
 } from "../services/api.service";
 import { ProfessionalReportGenerator } from "../utils/reportGenerator";
+import { useDatabaseStore } from "../stores/databaseStore";
 
 interface ValidationIssue {
   type: string;
@@ -66,6 +67,13 @@ interface AnalysisResult {
   };
 
   call_prep_questions?: string | null;
+
+  questions_json?: Array<{
+    number: number;
+    question: string;
+    category: string;
+    why_asking: string;
+  }>;
   benchmarking?: string | null;
 
   [key: string]: any;
@@ -75,6 +83,7 @@ export const useAnalysisStore = defineStore("analysis", {
   state: () => ({
     isLoading: false,
     currentRequestId: null as string | null,
+    currentAnalysisId: null as string | null,
     analysisResult: null as AnalysisResult | null,
     selectedCategory: "technology" as string,
     error: null as string | null,
@@ -168,6 +177,11 @@ export const useAnalysisStore = defineStore("analysis", {
         if (result && (result as any).request_id) {
           this.currentRequestId = (result as any).request_id;
           console.log("📊 Request ID stored:", this.currentRequestId);
+        }
+
+        if (result && (result as any).analysis_id) {
+          this.currentAnalysisId = (result as any).analysis_id; // ✅ ADD THIS
+          console.log("💾 Analysis ID stored:", this.currentAnalysisId);
         }
 
         // DO NOT VALIDATE STRUCTURE - JUST SANITIZE
@@ -396,6 +410,9 @@ export const useAnalysisStore = defineStore("analysis", {
         traction: data.traction || {},
 
         call_prep_questions: (data as any).call_prep_questions || null,
+        questions_json: Array.isArray(data.questions_json)
+          ? data.questions_json
+          : [],
         benchmarking: (data as any).benchmarking || null,
       };
       console.log(

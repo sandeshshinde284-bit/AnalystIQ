@@ -127,22 +127,9 @@
               type="button"
               class="social-btn google-btn"
               title="Sign in with Google"
+              @click="handleLogin"
             >
               <i class="ri-google-fill"></i>
-            </button>
-            <button
-              type="button"
-              class="social-btn microsoft-btn"
-              title="Sign in with Microsoft"
-            >
-              <i class="ri-microsoft-fill"></i>
-            </button>
-            <button
-              type="button"
-              class="social-btn linkedin-btn"
-              title="Sign in with LinkedIn"
-            >
-              <i class="ri-linkedin-fill"></i>
             </button>
           </div>
 
@@ -172,8 +159,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
-import { useRouter } from "vue-router";
+import { ref, onMounted } from "vue";
+import { useRouter, useRoute } from "vue-router";
+import { useAuthStore } from "@/stores/authStore";
+
+const router = useRouter();
+const route = useRoute();
+const authStore = useAuthStore();
 
 interface FormData {
   email: string;
@@ -186,7 +178,6 @@ interface FormErrors {
   password: string;
 }
 
-const router = useRouter();
 const isLoading = ref(false);
 const showPassword = ref(false);
 const loginError = ref("");
@@ -200,6 +191,14 @@ const formData = ref<FormData>({
 const formErrors = ref<FormErrors>({
   email: "",
   password: "",
+});
+
+// ✅ ADD: Check if already logged in
+onMounted(() => {
+  if (authStore.isAuthenticated) {
+    console.log("✅ User already logged in, redirecting to analysis");
+    router.push("/app/new-analysis");
+  }
 });
 
 function validateForm(): boolean {
@@ -240,23 +239,18 @@ async function handleLogin(): Promise<void> {
   isLoading.value = true;
 
   try {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    // ✅ Use AuthStore's Google login
+    console.log("🔑 Attempting Google login...");
+    await authStore.loginWithGoogle();
 
-    console.log("Login attempt:", {
-      email: formData.value.email,
-      rememberMe: formData.value.rememberMe,
-    });
-
-    if (formData.value.email && formData.value.password) {
-      if (formData.value.rememberMe) {
-        localStorage.setItem("rememberEmail", formData.value.email);
-      }
-      router.push("/app/analysis");
-    }
+    // ✅ Success - redirect to analysis or referrer
+    const redirectPath =
+      (route.query.redirect as string) || "/app/new-analysis";
+    console.log("✅ Login successful, redirecting to:", redirectPath);
+    router.push(redirectPath);
   } catch (error: any) {
-    loginError.value =
-      error.message || "An error occurred during login. Please try again.";
-  } finally {
+    console.error("❌ Login failed:", error);
+    loginError.value = error.message || "Login failed. Please try again.";
     isLoading.value = false;
   }
 }

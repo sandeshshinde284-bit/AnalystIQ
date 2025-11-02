@@ -52,6 +52,9 @@
 <script setup lang="ts">
 import { useRouter } from "vue-router";
 import FeatureCard from "../components/Molecules/FeatureCard.vue";
+import { useAuthStore } from "@/stores/authStore";
+import { onMounted } from "vue";
+
 const features = [
   {
     icon: "ri-file-text-line",
@@ -79,8 +82,32 @@ const features = [
   },
 ];
 const router = useRouter();
+const authStore = useAuthStore();
+
+onMounted(async () => {
+  // ✅ Initialize auth on page load
+  try {
+    await authStore.initializeAuth();
+
+    // If already logged in, redirect to analysis
+    if (authStore.isAuthenticated) {
+      console.log("✅ User already logged in, redirecting to analysis");
+      router.push("/app/new-analysis");
+    }
+  } catch (error) {
+    console.error("❌ Auth check failed:", error);
+  }
+});
+
+// ✅ Keep existing goToNewAnalysis but add auth check
 function goToNewAnalysis() {
-  router.push("/app/new-analysis");
+  if (!authStore.isAuthenticated) {
+    console.log("🔑 User not authenticated, going to login");
+    router.push("/login");
+  } else {
+    console.log("✅ User authenticated, going to analysis");
+    router.push("/app/new-analysis");
+  }
 }
 </script>
 

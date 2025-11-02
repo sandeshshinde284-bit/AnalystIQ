@@ -3,8 +3,10 @@
   <header>
     <div class="container">
       <div class="logo">
-        <i class="ri-line-chart-fill logo-icon"></i>
-        Analyst<span>IQ</span>
+        <router-link to="/" class="logo">
+          <i class="ri-line-chart-fill logo-icon"></i>
+          <span>AnalystIQ</span>
+        </router-link>
       </div>
       <nav>
         <ul>

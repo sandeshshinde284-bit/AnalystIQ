@@ -806,45 +806,18 @@
             <div>
               <h3>🎯 Pre-Call Founder Questionnaire</h3>
               <p class="call-prep-subtitle">
-                Context-aware questions generated from your analysis to help the
-                founder prepare
+                {{ parsedCallPrepQuestions.length }} context-aware questions
+                generated from your analysis
               </p>
             </div>
           </div>
 
           <div class="call-prep-container">
-            <!-- Questions Display -->
+            <!-- Questions Content -->
             <div
-              v-if="analysisData.call_prep_questions"
+              v-if="parsedCallPrepQuestions.length > 0"
               class="call-prep-content"
             >
-              <!-- Category Stats Bar -->
-              <!-- <div class="category-stats-bar">
-                <div
-                  v-for="cat in [
-                    'revenue',
-                    'market',
-                    'team',
-                    'product',
-                    'growth',
-                  ]"
-                  :key="cat"
-                  class="cat-stat"
-                  :style="{ borderLeftColor: getCategoryColor(cat) }"
-                >
-                  <i :class="getCategoryIcon(cat)"></i>
-                  <span class="cat-name">{{
-                    cat.charAt(0).toUpperCase() + cat.slice(1)
-                  }}</span>
-                  <span class="cat-count">
-                    {{
-                      parsedCallPrepQuestions.filter((q) => q.category === cat)
-                        .length
-                    }}
-                  </span>
-                </div>
-              </div> -->
-
               <!-- Questions Grid -->
               <div class="questions-grid-pro">
                 <div
@@ -852,49 +825,51 @@
                   :key="idx"
                   class="question-card-pro"
                   :style="{
-                    borderLeftColor: getCategoryColor(q.category),
-                    '--accent-color': getCategoryColor(q.category),
+                    borderLeftColor: q.color,
+                    '--accent-color': q.color,
                   }"
                 >
                   <!-- Question Header -->
                   <div class="q-header-pro">
-                    <div class="q-number-badge">{{ q.number }}</div>
+                    <div
+                      class="q-number-badge"
+                      :style="{ borderColor: q.color, color: q.color }"
+                    >
+                      {{ q.number }}
+                    </div>
                     <div class="q-header-info">
-                      <div class="q-meta">
-                        <!-- <span
-                          class="q-category-badge"
-                          :style="{
-                            backgroundColor:
-                              getCategoryColor(q.category) + '15',
-                            color: getCategoryColor(q.category),
-                            borderColor: getCategoryColor(q.category) + '30',
-                          }"
-                        >
-                          <i :class="getCategoryIcon(q.category)"></i>
-                          {{ extractCategoryLabel(q.title) }}
-                        </span> -->
-                        <span class="q-body-pro"
-                          >{{ q.question }}
-                          <span class="q-difficulty">
-                            {{ getDifficultyLevel(q.question) }}
-                          </span>
-                        </span>
+                      <!-- Category Badge -->
+                      <span
+                        class="q-category-badge"
+                        :style="{
+                          backgroundColor: q.color + '20',
+                          color: q.color,
+                          borderColor: q.color + '40',
+                        }"
+                      >
+                        {{ q.category.toUpperCase() }}
+                      </span>
+                      <span
+                        class="q-difficulty-badge"
+                        :style="{
+                          backgroundColor: q.color + '15',
+                          color: q.color,
+                        }"
+                      >
+                        {{ getDifficultyLevel(q.question) }}
+                      </span>
+                      <!-- Question Text -->
+                      <span class="q-body-pro">{{ q.question }}</span>
+
+                      <!-- Why Asking Insight -->
+                      <div
+                        class="q-insight"
+                        :style="{ borderLeftColor: q.color }"
+                      >
+                        <i class="ri-lightbulb-flash-line"></i>
+                        <span>{{ q.why_asking }}</span>
                       </div>
                     </div>
-                  </div>
-
-                  <!-- Question Title (from brackets) -->
-                  <!-- <h4 class="q-title-pro">
-                    {{ extractCategoryLabel(q.title) }}
-                  </h4> -->
-
-                  <!-- Full Question Text -->
-                  <!-- <p class="q-body-pro">{{ q.question }}</p> -->
-
-                  <!-- Context Insight -->
-                  <div class="q-insight">
-                    <i class="ri-lightbulb-flash-line"></i>
-                    <span>{{ getQuestionContext(q.title, q.category) }}</span>
                   </div>
                 </div>
               </div>
@@ -963,182 +938,25 @@
           v-show="activeTab === 'benchmarking'"
           class="tab-pane"
         >
-          <h3>📊 Industry Benchmark Comparison</h3>
-          <p class="tab-description">
-            How this startup compares to sector benchmarks at their stage
-          </p>
+          <div class="benchmarking-section-header">
+            <h3>📊 Industry Benchmark Comparison</h3>
+            <p class="tab-description">
+              Comprehensive benchmark analysis comparing this startup to
+              industry standards
+            </p>
+          </div>
 
           <div class="benchmarking-section">
-            <!-- Benchmark Display -->
-            <div v-if="analysisData.benchmarking" class="benchmarking-display">
-              <!-- Overview Summary -->
-              <div class="benchmark-overview">
-                <div class="overview-card">
-                  <div class="overview-label">Percentile Rank</div>
-                  <div class="overview-value">72nd</div>
-                  <p class="overview-desc">
-                    Out of Seed-stage B2B SaaS companies
-                  </p>
-                </div>
-                <div class="overview-card">
-                  <div class="overview-label">Performance</div>
-                  <div class="overview-value">Above Average</div>
-                  <p class="overview-desc">Competitive advantages identified</p>
-                </div>
-                <div class="overview-card">
-                  <div class="overview-label">Growth Score</div>
-                  <div class="overview-value">8.2/10</div>
-                  <p class="overview-desc">Strong momentum vs peers</p>
-                </div>
-              </div>
+            <!-- Show parsed component if data exists -->
+            <BenchmarkingDisplay
+              v-if="analysisData?.benchmarking"
+              :benchmarking-text="analysisData.benchmarking"
+            />
 
-              <!-- Key Metrics Comparison -->
-              <div class="metrics-comparison">
-                <h4>Key Performance Metrics</h4>
-                <div class="comparison-grid">
-                  <!-- Metric Card 1: Revenue/Employee -->
-                  <div class="metric-comparison-card above-average">
-                    <div class="metric-header">
-                      <span class="metric-name">Revenue per Employee</span>
-                      <span class="metric-rating">🟢 Above Average</span>
-                    </div>
-                    <div class="metric-comparison">
-                      <div class="comparison-item">
-                        <span class="label">This Startup</span>
-                        <span class="value">$750K</span>
-                      </div>
-                      <div class="comparison-item">
-                        <span class="label">Industry Benchmark</span>
-                        <span class="value">$500K</span>
-                      </div>
-                    </div>
-                    <div class="metric-bar-container">
-                      <div class="bar-background">
-                        <div class="bar-benchmark" style="width: 100%"></div>
-                        <div class="bar-company" style="width: 150%"></div>
-                      </div>
-                    </div>
-                    <p class="metric-insight">
-                      💡 Strong revenue efficiency - indicates effective
-                      operations
-                    </p>
-                  </div>
-
-                  <!-- Metric Card 2: CAC -->
-                  <div class="metric-comparison-card above-average">
-                    <div class="metric-header">
-                      <span class="metric-name">Customer Acquisition Cost</span>
-                      <span class="metric-rating">🟢 Above Average</span>
-                    </div>
-                    <div class="metric-comparison">
-                      <div class="comparison-item">
-                        <span class="label">This Startup</span>
-                        <span class="value">$5,000</span>
-                      </div>
-                      <div class="comparison-item">
-                        <span class="label">Industry Benchmark</span>
-                        <span class="value">$8,000</span>
-                      </div>
-                    </div>
-                    <div class="metric-bar-container">
-                      <div class="bar-background">
-                        <div class="bar-benchmark" style="width: 100%"></div>
-                        <div class="bar-company" style="width: 62.5%"></div>
-                      </div>
-                    </div>
-                    <p class="metric-insight">
-                      💡 Lower CAC - efficient marketing and sales strategy
-                    </p>
-                  </div>
-
-                  <!-- Metric Card 3: Team Experience -->
-                  <div class="metric-comparison-card below-average">
-                    <div class="metric-header">
-                      <span class="metric-name">Team Experience</span>
-                      <span class="metric-rating">🔴 Below Average</span>
-                    </div>
-                    <div class="metric-comparison">
-                      <div class="comparison-item">
-                        <span class="label">This Startup</span>
-                        <span class="value">5 years avg</span>
-                      </div>
-                      <div class="comparison-item">
-                        <span class="label">Industry Benchmark</span>
-                        <span class="value">8 years avg</span>
-                      </div>
-                    </div>
-                    <div class="metric-bar-container">
-                      <div class="bar-background">
-                        <div class="bar-benchmark" style="width: 100%"></div>
-                        <div class="bar-company" style="width: 62.5%"></div>
-                      </div>
-                    </div>
-                    <p class="metric-insight">
-                      ⚠️ Opportunity: Consider hiring experienced advisors or
-                      executives
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Legend -->
-              <div class="benchmark-legend">
-                <div class="legend-item">
-                  <span class="legend-color" style="background: #22c55e"></span>
-                  <span>🟢 Above Average = Competitive advantage</span>
-                </div>
-                <div class="legend-item">
-                  <span class="legend-color" style="background: #eab308"></span>
-                  <span>🟡 Average = Expected range</span>
-                </div>
-                <div class="legend-item">
-                  <span class="legend-color" style="background: #ef4444"></span>
-                  <span>🔴 Below Average = Improvement area</span>
-                </div>
-              </div>
-
-              <!-- Improvement Recommendations -->
-              <div class="improvement-recommendations">
-                <h4>Recommendations for Improvement</h4>
-                <div class="recommendations-list">
-                  <div class="recommendation-item">
-                    <div class="rec-number">1</div>
-                    <div class="rec-content">
-                      <h5>Strengthen Leadership Team</h5>
-                      <p>
-                        Hire a VP of Sales or VP of Operations with 10+ years
-                        experience in B2B SaaS
-                      </p>
-                      <span class="rec-impact"
-                        >Potential Impact: +15 points on investment score</span
-                      >
-                    </div>
-                  </div>
-                  <div class="recommendation-item">
-                    <div class="rec-number">2</div>
-                    <div class="rec-content">
-                      <h5>Maintain Marketing Efficiency</h5>
-                      <p>
-                        Continue focus on low-CAC channels and customer
-                        retention (LTV is strong)
-                      </p>
-                      <span class="rec-impact"
-                        >Potential Impact: Maintain competitive edge</span
-                      >
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Empty State -->
+            <!-- Empty state -->
             <div v-else class="empty-state">
               <i class="ri-database-2-line"></i>
               <p>No benchmark analysis available</p>
-              <span class="hint"
-                >Benchmarking will be generated based on your startup sector and
-                stage</span
-              >
             </div>
           </div>
         </div>
@@ -1354,6 +1172,49 @@ import ValidationSummary from "../components/Molecules/ValidationSummary.vue";
 import TractionMetricCard from "../components/Molecules/TractionMetricCard.vue";
 import PublicDataCard from "../components/Molecules/PublicDataCard.vue";
 import NewsArticleCard from "../components/Molecules/NewsArticleCard.vue";
+import BenchmarkingDisplay from "../components/Molecules/BenchmarkingDisplay.vue";
+
+interface ParsedQuestion {
+  number: number;
+  question: string;
+  category: string;
+  why_asking: string;
+  color: string;
+}
+
+interface BenchmarkMetric {
+  name: string;
+  yourValue: string;
+  benchmark: string;
+  assessment: string;
+  implication: string;
+  color: "green" | "yellow" | "red";
+}
+
+interface ParsedBenchmarking {
+  metrics: BenchmarkMetric[];
+  summary: string;
+}
+
+const categoryColorMap: Record<string, string> = {
+  // Primary categories
+  financials: "#ff6b6b",
+  execution: "#00d4ff",
+  market: "#4ecdc4",
+  team: "#a855f7",
+  product: "#ffd93d",
+  competition: "#22c55e",
+  growth: "#22c55e",
+
+  // Alternative spellings/variations
+  revenue: "#ff6b6b",
+  burn: "#ff6b6b",
+  team_traction: "#a855f7",
+  marketing: "#4ecdc4",
+  sales: "#00d4ff",
+  operations: "#00d4ff",
+  other: "#00d4ff",
+};
 
 const router = useRouter();
 const analysisStore = useAnalysisStore();
@@ -1588,20 +1449,74 @@ function getCustomerInsight(customerData: string): string {
 }
 
 function downloadQuestions() {
-  const text = analysisData.value?.call_prep_questions || "";
-  const blob = new Blob([text], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${analysisData.value.startupName}_CallPrepQuestions.txt`;
-  link.click();
+  try {
+    const questions = parsedCallPrepQuestions.value;
+
+    if (questions.length === 0) {
+      alert("No questions to download");
+      return;
+    }
+
+    // Format questions with category and insight
+    const text = questions
+      .map(
+        (q) =>
+          `Q${q.number}. ${q.question}\n` +
+          `Category: ${q.category.toUpperCase()}\n` +
+          `Key Insight: ${q.why_asking}\n` +
+          `${"".padEnd(80, "=")}`
+      )
+      .join("\n\n");
+
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${analysisData.value.startupName}_CallPrepQuestions_${new Date().toISOString().split("T")[0]}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    console.log("✅ Questions downloaded successfully");
+  } catch (error) {
+    console.error("❌ Download failed:", error);
+    alert("Failed to download questions");
+  }
 }
 
 function copyQuestionsToClipboard() {
-  const text = analysisData.value?.call_prep_questions || "";
-  navigator.clipboard.writeText(text).then(() => {
-    alert("Questions copied to clipboard!");
-  });
+  try {
+    const questions = parsedCallPrepQuestions.value;
+
+    if (questions.length === 0) {
+      alert("No questions to copy");
+      return;
+    }
+
+    const text = questions
+      .map(
+        (q) =>
+          `Q${q.number}. ${q.question}\n` +
+          `Category: ${q.category.toUpperCase()}\n` +
+          `Key Insight: ${q.why_asking}`
+      )
+      .join("\n" + "=".repeat(80) + "\n\n");
+
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        console.log("✅ Questions copied to clipboard");
+        alert(`✅ ${questions.length} questions copied to clipboard!`);
+      })
+      .catch((err) => {
+        console.error("❌ Copy failed:", err);
+        alert("Failed to copy to clipboard");
+      });
+  } catch (error) {
+    console.error("❌ Error:", error);
+    alert("Failed to copy questions");
+  }
 }
 
 function getRevenueInsight(revenueData: string): string {
@@ -1681,21 +1596,16 @@ function getTractionSummary(): string {
 }
 
 onMounted(() => {
+  console.log("=== LIVE ANALYSIS DATA ===");
+  console.log(JSON.stringify(analysisData.value, null, 2));
+  console.log("=== END LIVE ===");
+
   if (!analysisData.value) {
     console.warn("No analysis data found - redirecting to new analysis");
     console.log("=== ANALYSIS DATA ===");
     console.log("Full result:", analysisData.value);
-    // console.log("Key Metrics:", analysisData.value.keyMetrics);
-    // console.log("Risk Assessment:", analysisData.value.riskAssessment);
-    // console.log("Summary Content:", analysisData.value.summaryContent);
     console.log("Validation Issues:", analysisStore.validationSummary);
-    console.log("Completeness:", analysisStore.analysisCompleteness);
-    console.log("=== TRACTION DATA DEBUG ===");
-    console.log("Full analysis data:", analysisData.value);
-    console.log("Traction data:", analysisData.value?.traction);
-    console.log("Traction customers:", analysisData.value?.traction?.customers);
-    console.log("Traction revenue:", analysisData.value?.traction?.revenue);
-    console.log("hasTractionData computed:", hasTractionData.value);
+
     setTimeout(() => {
       router.push("/");
     }, 100);
@@ -1780,14 +1690,6 @@ function openSourceModal(metric: any) {
   showSourceModal.value = true;
 }
 
-// async function handleExportPDF() {
-//   try {
-//     await analysisStore.exportReport();
-//     alert("Report exported successfully!");
-//   } catch (error: any) {
-//     alert(`Export failed: ${error.message}`);
-//   }
-// }
 async function handlePrintReport() {
   try {
     // Get all tab panes
@@ -1863,59 +1765,83 @@ function parseCallPrepQuestions(rawText: string): Array<{
   title: string;
   question: string;
   category: string;
+  why_asking: string;
 }> {
   if (!rawText) return [];
 
   const lines = rawText.split("\n");
   const questions = [];
-  let currentNumber = null;
+  let currentNumber: number | null = null;
   let currentTitle = "";
   let currentQuestion = "";
+  let currentWhy = "";
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const line = lines[i].trim();
 
-    // Match numbered question at start of line
-    const numberMatch = line.match(/^(\d+)\.\s+(.+)$/);
+    // Match numbered question: "Q1. What is..."
+    const numberMatch = line.match(/^Q?(\d+)\.\s+(.+)$/);
 
     if (numberMatch) {
-      //  Save previous question COMPLETELY before starting new one
+      // Save previous question if exists
       if (currentNumber !== null) {
-        const category = currentTitle.split(/[\[\]]/)[1] || currentTitle;
+        const category = currentTitle.split(/[\[\]]/)[1] || "other";
         questions.push({
           number: currentNumber,
           title: currentTitle,
-          question: currentQuestion.trim(), // âœ… FULL question text
+          question: currentQuestion.trim(),
           category: extractCategory(category),
+          why_asking: currentWhy || "Key insight for investment decision",
         });
       }
 
-      //  Parse current question
+      // Start new question
       const [, number, rest] = numberMatch;
       currentNumber = parseInt(number);
-      currentTitle = rest; // Get title/category
-      currentQuestion = rest; // START with the full line
-    } else if (currentNumber !== null && line.trim()) {
-      //  APPEND all continuation lines
-      currentQuestion += "\n" + line.trim();
+      currentTitle = rest;
+      currentQuestion = rest;
+      currentWhy = "";
+    }
+    // Match "Category:" line
+    else if (line.toLowerCase().startsWith("category:")) {
+      const categoryMatch = line.match(/category:\s*(.+)/i);
+      if (categoryMatch) {
+        currentTitle = `[${categoryMatch[1]}]`;
+      }
+    }
+    // Match "why_asking:" or context line
+    else if (
+      line.toLowerCase().includes("why_asking") ||
+      line.toLowerCase().includes("insight")
+    ) {
+      const whyMatch = line.match(/(?:why_asking|insight):\s*(.+)/i);
+      if (whyMatch) {
+        currentWhy = whyMatch[1];
+      }
+    }
+    // Continuation of question or why_asking
+    else if (currentNumber !== null && line.length > 0) {
+      if (!currentWhy && line.length > 50) {
+        currentQuestion += " " + line;
+      } else if (!currentWhy) {
+        currentWhy = line;
+      }
     }
   }
 
-  //  Don't forget the last question
+  // Don't forget last question
   if (currentNumber !== null) {
-    const category = currentTitle.split(/[\[\]]/)[1] || currentTitle;
+    const category = currentTitle.split(/[\[\]]/)[1] || "other";
     questions.push({
       number: currentNumber,
       title: currentTitle,
-      question: currentQuestion.trim(), // âœ… FULL question text
+      question: currentQuestion.trim(),
       category: extractCategory(category),
+      why_asking: currentWhy || "Key insight for investment decision",
     });
   }
 
-  console.log("âœ… Parsed questions:", questions.length);
-  questions.forEach((q) => {
-    console.log(`Q${q.number}: ${q.question.substring(0, 80)}...`);
-  });
+  console.log("✅ Parsed questions from text:", questions.length);
   return questions;
 }
 
@@ -1932,48 +1858,47 @@ function extractCategory(
   return "other";
 }
 
-// function extractCategoryLabel(title: string): string {
-//   const lower = title.toLowerCase();
-
-//   // Extract first bracket content if exists: "[Revenue] Question?"
-//   const bracketMatch = lower.match(/^\[([^\]]+)\]/);
-//   if (bracketMatch) {
-//     return bracketMatch[1]; // Return just "[Revenue]"
-//   }
-
-//   // Extract first few words as category (max 5 words)
-//   const words = lower.split(" ").slice(0, 5);
-//   return words.join(" "); // "Given the projected ARR of"
-// }
-
-// function getCategoryIcon(category: string): string {
-//   const icons = {
-//     revenue: "ri-money-dollar-circle-fill",
-//     market: "ri-bar-chart-box-fill",
-//     team: "ri-team-fill",
-//     product: "ri-lightbulb-flash-fill",
-//     growth: "ri-rocket-2-fill",
-//     other: "ri-question-line",
-//   };
-//   return icons[category as keyof typeof icons] || icons.other;
-// }
-
-function getCategoryColor(category: string): string {
-  const colors = {
-    revenue: "#ff6b6b",
-    market: "#4ecdc4",
-    team: "#a855f7",
-    product: "#ffd93d",
-    growth: "#22c55e",
-    other: "#00d4ff",
-  };
-  return colors[category as keyof typeof colors] || colors.other;
-}
+const getCategoryColor = (category: string): string => {
+  const normalized = (category || "other").toLowerCase().trim();
+  return (
+    categoryColorMap[normalized as keyof typeof categoryColorMap] || "#00d4ff"
+  );
+};
 
 // Computed property for parsed questions
 const parsedCallPrepQuestions = computed(() => {
-  if (!analysisData.value?.call_prep_questions) return [];
-  return parseCallPrepQuestions(analysisData.value.call_prep_questions);
+  console.log("🔍 Call Prep - Checking for questions_json...");
+
+  // PRIMARY SOURCE: Use structured questions_json from backend
+  if (
+    analysisData.value?.questions_json &&
+    Array.isArray(analysisData.value.questions_json) &&
+    analysisData.value.questions_json.length > 0
+  ) {
+    console.log(
+      "✅ Using questions_json - Found",
+      analysisData.value.questions_json.length,
+      "questions"
+    );
+
+    return analysisData.value.questions_json.map(
+      (q: any, idx: number): ParsedQuestion => {
+        const category = (q.category || "other").toLowerCase().trim();
+        const color = getCategoryColor(category);
+
+        return {
+          number: q.number || idx + 1,
+          question: q.question || "",
+          category: category,
+          why_asking: q.why_asking || "Key insight for investment decision",
+          color: color,
+        };
+      }
+    );
+  }
+
+  console.log("❌ No questions_json found");
+  return [];
 });
 
 function getDifficultyLevel(question: string): string {
@@ -1983,115 +1908,35 @@ function getDifficultyLevel(question: string): string {
   return "⭐⭐⭐ Deep Dive";
 }
 
-// function getQuestionContext(title: string, category: string): string {
-//   const contexts: Record<string, string> = {
-//     "Revenue Volatility":
-//       "Understand revenue stability and conversion strategy",
-//     "Market Adoption Risk":
-//       "Assess market fit and customer acquisition strategy",
-//     "Competitive Risk": "Evaluate sustainable competitive advantages",
-//     "Active Users": "Validate user engagement and retention metrics",
-//     "Monthly Burn Rate": "Understand cash runway and burn optimization",
-//     "Team Capabilities": "Assess founder and team depth for execution",
-//     "Unified XR Commerce Studio Claim":
-//       "Verify technical implementation and AI integration",
-//     Partnerships: "Understand ecosystem and revenue synergies",
-//     "Website Visitors": "Assess marketing effectiveness and CAC",
-//     "Growth Rate": "Validate growth acceleration and sustainability",
-//   };
-//   return contexts[title] || "Key insight for investment decision";
-// }
-
-function getQuestionContext(title: string, category: string): string {
-  const contexts: Record<string, string> = {
-    revenue: "Validates unit economics and revenue assumptions",
-    market: "Tests market adoption strategy and TAM understanding",
-    team: "Validates founder's relevant experience and capabilities",
-    product: "Measures product-market fit and technical execution",
-    growth: "Assesses growth drivers and scalability",
-    other: "Key insight for investment decision",
-  };
-  return contexts[category] || "Key insight for investment decision";
-}
-
 function emailQuestions() {
-  const questions = parsedCallPrepQuestions.value
-    .map((q) => `${q.number}. [${q.title}] ${q.question}`)
-    .join("\n\n");
+  try {
+    const questions = parsedCallPrepQuestions.value;
 
-  const subject = `Pre-Call Questions - ${analysisData.value.startupName}`;
-  const body = encodeURIComponent(
-    `Hi,\n\nPlease review these questions before our call:\n\n${questions}\n\nThanks!`
-  );
+    if (questions.length === 0) {
+      alert("No questions to email");
+      return;
+    }
 
-  window.open(`mailto:?subject=${subject}&body=${body}`);
-}
+    const text = questions
+      .map(
+        (q) =>
+          `Q${q.number}. ${q.question}\n` +
+          `Category: ${q.category.toUpperCase()}\n` +
+          `Key Insight: ${q.why_asking}`
+      )
+      .join("\n" + "=".repeat(80) + "\n\n");
 
-// Parse benchmarking data into structured format
-function parseBenchmarkingData(rawText: string): {
-  metrics: Array<{
-    name: string;
-    companyValue: number;
-    benchmarkValue: number;
-    percentile: number;
-    rating: "above" | "average" | "below";
-    insight: string;
-  }>;
-  summary: string;
-} {
-  // Extract key metrics from the text
-  const metrics = [];
-  const lines = rawText.split("\n");
+    const subject = `Pre-Call Founder Questions - ${analysisData.value.startupName}`;
+    const body = encodeURIComponent(
+      `Hi,\n\nPlease review these ${questions.length} questions before our upcoming call. They're designed to help us understand your business better.\n\n${text}\n\nLooking forward to our discussion!\n\nBest regards`
+    );
 
-  // Try to extract structured data
-  // This is a basic parser - adjust based on Gemini output format
-
-  return {
-    metrics: [
-      {
-        name: "Revenue per Employee",
-        companyValue: 750000,
-        benchmarkValue: 500000,
-        percentile: 75,
-        rating: "above",
-        insight: "Strong revenue efficiency",
-      },
-      {
-        name: "Customer Acquisition Cost",
-        companyValue: 5000,
-        benchmarkValue: 8000,
-        percentile: 70,
-        rating: "above",
-        insight: "Efficient marketing spend",
-      },
-      {
-        name: "Team Experience (years)",
-        companyValue: 5,
-        benchmarkValue: 8,
-        percentile: 40,
-        rating: "below",
-        insight: "Opportunity: Hire experienced talent",
-      },
-    ],
-    summary: rawText.substring(0, 200),
-  };
-}
-
-const structuredBenchmarking = computed(() => {
-  if (!analysisData.value?.benchmarking) return null;
-  return parseBenchmarkingData(analysisData.value.benchmarking);
-});
-
-function getBenchmarkRatingIcon(rating: string): string {
-  return rating === "above" ? "🟢" : rating === "below" ? "🔴" : "🟡";
-}
-
-function getBenchmarkRatingColor(rating: string): string {
-  return rating === "above"
-    ? "#22c55e"
-    : rating === "below"
-      ? "#ef4444"
-      : "#eab308";
+    window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${body}`);
+    console.log("✅ Email client opened");
+  } catch (error) {
+    console.error("❌ Email failed:", error);
+    alert("Failed to open email client");
+  }
 }
 </script>
 
@@ -4345,10 +4190,6 @@ function getBenchmarkRatingColor(rating: string): string {
     &::before {
       opacity: 1;
     }
-
-    // .q-title-pro {
-    //   color: var(--accent-color);
-    // }
   }
 }
 
@@ -4390,47 +4231,20 @@ function getBenchmarkRatingColor(rating: string): string {
   flex-wrap: wrap;
 }
 
-// .q-category-badge {
-//   display: inline-flex;
-//   align-items: center;
-//   gap: 6px;
-//   padding: 6px 12px;
-//   border: 1px solid;
-//   border-radius: 6px;
-//   font-size: 11px;
-//   font-weight: 600;
-//   text-transform: uppercase;
-//   letter-spacing: 0.4px;
-
-//   i {
-//     font-size: 13px;
-//   }
-// }
-
 .q-difficulty {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.5);
   font-weight: 500;
 }
 
-// .q-title-pro {
-//   margin: 0 0 12px 0;
-//   font-size: 14px;
-//   font-weight: 600;
-//   color: #00d4ff;
-//   text-transform: uppercase;
-//   letter-spacing: 0.5px;
-//   transition: color 0.3s ease;
-// }
-
 .q-body-pro {
-  margin: 0 0 14px 0;
+  display: block;
+  margin: 8px 0;
   font-size: 14px;
   line-height: 1.7;
   color: rgba(255, 255, 255, 0.85);
   word-wrap: break-word;
   white-space: normal;
-  display: block;
   overflow: visible;
   max-height: none;
 }
@@ -4446,15 +4260,22 @@ function getBenchmarkRatingColor(rating: string): string {
     rgba(0, 212, 255, 0.03)
   );
   border: 1px solid rgba(0, 212, 255, 0.15);
+  border-left: 3px solid;
   border-radius: 8px;
   font-size: 12px;
   color: rgba(0, 212, 255, 0.9);
   line-height: 1.5;
+  margin-top: 8px;
 
   i {
     font-size: 14px;
     flex-shrink: 0;
     margin-top: 1px;
+    color: inherit;
+  }
+
+  span {
+    flex: 1;
   }
 }
 
@@ -4607,10 +4428,6 @@ function getBenchmarkRatingColor(rating: string): string {
     }
   }
 
-  // .category-stats-bar {
-  //   grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-  // }
-
   .question-card-pro {
     padding: 16px;
   }
@@ -4621,6 +4438,103 @@ function getBenchmarkRatingColor(rating: string): string {
 
   .call-prep-footer {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Call Prep - Category Badge */
+.q-category-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 8px;
+  margin-bottom: 8px;
+  border: 1px solid;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+
+  &:hover {
+    transform: scale(1.05);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// RESPONSIVE
+// ─────────────────────────────────────────────────────────────────────────
+
+@media (max-width: 768px) {
+  .questions-grid-pro {
+    gap: 12px;
+  }
+
+  .question-card-pro {
+    padding: 16px;
+  }
+}
+
+// ============================================================================
+// BENCHMARKING - CLEAN TEXT DISPLAY
+// ============================================================================
+
+.benchmarking-section-header {
+  margin-bottom: 24px;
+
+  h3 {
+    margin: 0 0 8px 0;
+    font-size: 1.5em;
+    color: #ffffff;
+    font-weight: 600;
+  }
+}
+
+.tab-description {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.benchmarking-section {
+  margin-top: 20px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: rgba(255, 255, 255, 0.5);
+
+  i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.6;
+  }
+
+  p {
+    margin: 0;
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.7);
+  }
+}
+
+// Responsive
+@media (max-width: 768px) {
+  .benchmarking-section-header h3 {
+    font-size: 1.2em;
+  }
+
+  .empty-state {
+    padding: 40px 15px;
+
+    i {
+      font-size: 40px;
+    }
+
+    p {
+      font-size: 13px;
+    }
   }
 }
 </style>
