@@ -76,6 +76,17 @@ interface AnalysisResult {
   }>;
   benchmarking?: string | null;
 
+  weights_applied?: {
+    founder: number;
+    market: number;
+    differentiation: number;
+    team: number;
+  };
+  weighted_recommendation?: {
+    weighted_score: number;
+    weights_used: any;
+  };
+
   [key: string]: any;
 }
 
@@ -92,6 +103,12 @@ export const useAnalysisStore = defineStore("analysis", {
     validationSummary: [] as ValidationIssue[],
     partialAnalysis: false,
     analysisCompleteness: 0,
+    customWeights: {
+      founder: 25,
+      market: 25,
+      differentiation: 25,
+      team: 25,
+    },
     processingSteps: [
       {
         id: "document-extraction",
@@ -139,7 +156,8 @@ export const useAnalysisStore = defineStore("analysis", {
     async startAnalysis(
       files: File[],
       category: string = "technology",
-      transcriptText: string = ""
+      transcriptText: string = "",
+      weights?: any
     ): Promise<AnalysisResult> {
       this.isLoading = true;
       this.error = null;
@@ -161,14 +179,16 @@ export const useAnalysisStore = defineStore("analysis", {
           "🎯 Starting analysis with files:",
           files.map((f) => f.name),
           category,
-          transcriptText
+          transcriptText,
+          weights || this.customWeights
         );
 
         const result = await analysisService.processAnalysis(
           files,
           category,
           this.updateProgress.bind(this),
-          transcriptText
+          transcriptText,
+          weights || this.customWeights
         );
 
         console.log("📊 Analysis result received:", result);
@@ -226,6 +246,12 @@ export const useAnalysisStore = defineStore("analysis", {
         (f) => f !== null
       ) as File[];
 
+      this.customWeights = analysisData.weights || {
+        founder: 25,
+        market: 25,
+        differentiation: 25,
+        team: 25,
+      };
       this.selectedCategory = analysisData.category || "technology";
 
       console.log("🔧 Enhanced analysis with data:", {
@@ -237,7 +263,8 @@ export const useAnalysisStore = defineStore("analysis", {
       return this.startAnalysis(
         files,
         analysisData.category,
-        analysisData.transcriptText || ""
+        analysisData.transcriptText || "",
+        this.customWeights
       );
     },
 
@@ -403,7 +430,7 @@ export const useAnalysisStore = defineStore("analysis", {
           ? data.documentsAnalyzed
           : [],
         analysisMetadata: data.analysisMetadata || {},
-        // ✅ ADD THESE TWO LINES:
+
         memo_pdf_base64: (data as any).memo_pdf_base64 || null,
         public_data: (data as any).public_data || null,
 
@@ -414,6 +441,9 @@ export const useAnalysisStore = defineStore("analysis", {
           ? data.questions_json
           : [],
         benchmarking: (data as any).benchmarking || null,
+
+        weights_applied: (data as any).weights_applied || null,
+        weighted_recommendation: (data as any).weighted_recommendation || null,
       };
       console.log(
         "VALIDATION SUMMARY STRUCTURE:",

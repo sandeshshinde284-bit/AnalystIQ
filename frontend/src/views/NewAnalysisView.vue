@@ -29,6 +29,104 @@
           >⚠️ Backend Disconnected - Please start backend server</span
         >
       </div>
+      <div
+        v-if="showWeightageModal"
+        class="weightage-modal-overlay"
+        @click="showWeightageModal = false"
+      >
+        <div class="weightage-modal-content" @click.stop>
+          <button class="modal-close" @click="showWeightageModal = false">
+            <i class="ri-close-line"></i>
+          </button>
+
+          <div class="weightage-customization">
+            <h4 style="color: #00d4ff; margin-top: 30px">
+              ⚙️ Customize Investment Weights
+            </h4>
+
+            <!-- Founder Weight -->
+            <div class="weight-slider-group">
+              <div class="weight-label">
+                <span>Founder Profile</span>
+                <span class="weight-value">{{ weights.founder }}%</span>
+              </div>
+              <input
+                v-model.number="weights.founder"
+                type="range"
+                min="0"
+                max="100"
+                class="weight-slider"
+              />
+            </div>
+
+            <!-- Market Weight -->
+            <div class="weight-slider-group">
+              <div class="weight-label">
+                <span>Market Size</span>
+                <span class="weight-value">{{ weights.market }}%</span>
+              </div>
+              <input
+                v-model.number="weights.market"
+                type="range"
+                min="0"
+                max="100"
+                class="weight-slider"
+              />
+            </div>
+
+            <!-- Differentiation Weight -->
+            <div class="weight-slider-group">
+              <div class="weight-label">
+                <span>Differentiation</span>
+                <span class="weight-value">{{ weights.differentiation }}%</span>
+              </div>
+              <input
+                v-model.number="weights.differentiation"
+                type="range"
+                min="0"
+                max="100"
+                class="weight-slider"
+              />
+            </div>
+
+            <!-- Team Weight -->
+            <div class="weight-slider-group">
+              <div class="weight-label">
+                <span>Team & Traction</span>
+                <span class="weight-value">{{ weights.team }}%</span>
+              </div>
+              <input
+                v-model.number="weights.team"
+                type="range"
+                min="0"
+                max="100"
+                class="weight-slider"
+              />
+            </div>
+
+            <!-- Total validation -->
+            <div
+              class="weight-total"
+              :class="{
+                valid: totalWeight === 100,
+                invalid: totalWeight !== 100,
+              }"
+            >
+              Total: {{ totalWeight }}%
+              <span v-if="totalWeight === 100">✔ Valid</span>
+              <span v-else>✗ Must equal 100%</span>
+            </div>
+
+            <button @click="resetWeights" class="reset-btn">
+              Reset to Default (25% each)
+            </button>
+          </div>
+          <p class="weightage-note">
+            💡 Custom weights only affect this analysis. Defaults reset on next
+            upload.
+          </p>
+        </div>
+      </div>
 
       <form @submit.prevent="handleAnalysis">
         <!-- Enhanced Category Dropdown -->
@@ -56,7 +154,14 @@
             <i class="dropdown-icon ri-arrow-down-s-line"></i>
           </div>
         </div>
-
+        <button
+          type="button"
+          @click="showWeightageModal = true"
+          class="customize-weights-btn"
+        >
+          <i class="ri-scales-line"></i>
+          Customize Investment Weights
+        </button>
         <!-- Primary Upload: Pitch Deck -->
         <div class="form-group">
           <label class="upload-section-title">
@@ -328,6 +433,33 @@ import FileUploadZone from "../components/Molecules/FileUploadZone.vue";
 import { getAllStartupSectors } from "../config/analysisConfig";
 import ErrorPopup from "../components/Molecules/ErrorPopup.vue";
 const isSubmitting = ref(false);
+const showWeightageModal = ref(false);
+
+const weights = ref({
+  founder: 25,
+  market: 25,
+  differentiation: 25,
+  team: 25,
+});
+
+const totalWeight = computed(() => {
+  return (
+    weights.value.founder +
+    weights.value.market +
+    weights.value.differentiation +
+    weights.value.team
+  );
+});
+
+// Reset to defaults
+function resetWeights() {
+  weights.value = {
+    founder: 25,
+    market: 25,
+    differentiation: 25,
+    team: 25,
+  };
+}
 
 // ✅ ADD ERROR POPUP STATE
 const showErrorPopup = ref(false);
@@ -640,6 +772,7 @@ async function handleAnalysis(): Promise<void> {
       files: uploadedFiles.value,
       transcriptText: transcriptText.value,
       uploadedFileCount: uploadedFileCount.value,
+      weights: weights.value,
     };
 
     console.log("🚀 Starting analysis with:", analysisData);
@@ -1195,5 +1328,199 @@ function formatFileSize(bytes: number): string {
   .upload-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.customize-weights-btn {
+  width: 100%;
+  padding: 14px 20px;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 212, 255, 0.15),
+    rgba(168, 85, 247, 0.1)
+  );
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  color: #00d4ff;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 24px;
+
+  i {
+    font-size: 18px;
+  }
+
+  &:hover {
+    background: linear-gradient(
+      135deg,
+      rgba(0, 212, 255, 0.25),
+      rgba(168, 85, 247, 0.15)
+    );
+    border-color: rgba(0, 212, 255, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 212, 255, 0.2);
+  }
+}
+
+.weightage-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.weightage-modal-content {
+  background: #1a2332;
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.weightage-customization {
+  background: rgba(0, 212, 255, 0.05);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 30px;
+
+  h4 {
+    margin: 0 0 20px 0;
+  }
+}
+
+.weight-slider-group {
+  margin-bottom: 20px;
+}
+
+.weight-label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 500;
+}
+
+.weight-value {
+  color: #00d4ff;
+  font-weight: 600;
+}
+
+.weight-slider {
+  width: 100%;
+  height: 6px;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+  border-radius: 3px;
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #00d4ff;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
+  }
+
+  &::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: #00d4ff;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+}
+
+.weight-total {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  text-align: center;
+  margin: 16px 0;
+  font-weight: 600;
+
+  &.valid {
+    border: 1px solid #22c55e;
+    color: #22c55e;
+  }
+
+  &.invalid {
+    border: 1px solid #ef4444;
+    color: #ef4444;
+  }
+}
+
+.customized-score-display {
+  background: linear-gradient(
+    135deg,
+    rgba(0, 212, 255, 0.1),
+    rgba(34, 197, 94, 0.1)
+  );
+  padding: 16px;
+  border-radius: 8px;
+  margin: 16px 0;
+  text-align: center;
+
+  h3 {
+    margin: 0;
+  }
+}
+
+.reset-btn {
+  width: 100%;
+  padding: 10px;
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  color: #00d4ff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background: rgba(0, 212, 255, 0.2);
+  }
+}
+
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 1.5em;
+  cursor: pointer;
+  transition: color 0.3s ease;
+
+  &:hover {
+    color: #ffffff;
+  }
+}
+
+.weightage-note {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 8px;
+  text-align: center;
 }
 </style>

@@ -62,15 +62,39 @@
             >{{ analysisData.recommendation.score }}/100</span
           >
         </div>
+        <div v-if="analysisData.weights_applied" class="weights-display">
+          <span class="weights-label">Custom Weights Applied:</span>
+          <div class="weights-badges">
+            <span
+              v-if="analysisData.weights_applied.founder > 0"
+              class="weight-badge"
+            >
+              Founder: {{ analysisData.weights_applied.founder }}%
+            </span>
+            <span
+              v-if="analysisData.weights_applied.market > 0"
+              class="weight-badge"
+            >
+              Market: {{ analysisData.weights_applied.market }}%
+            </span>
+            <span
+              v-if="analysisData.weights_applied.differentiation > 0"
+              class="weight-badge"
+            >
+              Diff: {{ analysisData.weights_applied.differentiation }}%
+            </span>
+            <span
+              v-if="analysisData.weights_applied.team > 0"
+              class="weight-badge"
+            >
+              Team: {{ analysisData.weights_applied.team }}%
+            </span>
+          </div>
+        </div>
         <p class="recommendation-justification">
           {{ analysisData.recommendation.justification }}
         </p>
       </div>
-
-      <!-- Customize Weights Button -->
-      <button @click="showWeightageModal = true" class="customize-weights-btn">
-        ⚙️ Customize Weights
-      </button>
 
       <!-- Tabs Navigation -->
       <div class="tabs-navigation">
@@ -1055,111 +1079,6 @@
       Start New Analysis
     </router-link>
   </div>
-
-  <!-- Weightage Modal -->
-  <div
-    v-if="showWeightageModal"
-    class="weightage-modal-overlay"
-    @click="showWeightageModal = false"
-  >
-    <div class="weightage-modal-content" @click.stop>
-      <button class="modal-close" @click="showWeightageModal = false">✕</button>
-
-      <div class="weightage-customization">
-        <h4 style="color: #00d4ff; margin-top: 30px">
-          ⚙️ Customize Investment Weights
-        </h4>
-
-        <!-- Founder Weight -->
-        <div class="weight-slider-group">
-          <div class="weight-label">
-            <span>Founder Profile</span>
-            <span class="weight-value">{{ weights.founder }}%</span>
-          </div>
-          <input
-            v-model.number="weights.founder"
-            type="range"
-            min="0"
-            max="100"
-            @change="recalculateScore"
-            class="weight-slider"
-          />
-        </div>
-
-        <!-- Market Weight -->
-        <div class="weight-slider-group">
-          <div class="weight-label">
-            <span>Market Size</span>
-            <span class="weight-value">{{ weights.market }}%</span>
-          </div>
-          <input
-            v-model.number="weights.market"
-            type="range"
-            min="0"
-            max="100"
-            @change="recalculateScore"
-            class="weight-slider"
-          />
-        </div>
-
-        <!-- Differentiation Weight -->
-        <div class="weight-slider-group">
-          <div class="weight-label">
-            <span>Differentiation</span>
-            <span class="weight-value">{{ weights.differentiation }}%</span>
-          </div>
-          <input
-            v-model.number="weights.differentiation"
-            type="range"
-            min="0"
-            max="100"
-            @change="recalculateScore"
-            class="weight-slider"
-          />
-        </div>
-
-        <!-- Team Weight -->
-        <div class="weight-slider-group">
-          <div class="weight-label">
-            <span>Team & Traction</span>
-            <span class="weight-value">{{ weights.team }}%</span>
-          </div>
-          <input
-            v-model.number="weights.team"
-            type="range"
-            min="0"
-            max="100"
-            @change="recalculateScore"
-            class="weight-slider"
-          />
-        </div>
-
-        <!-- Total validation -->
-        <div
-          class="weight-total"
-          :class="{ valid: totalWeight === 100, invalid: totalWeight !== 100 }"
-        >
-          Total: {{ totalWeight }}%
-          <span v-if="totalWeight === 100">✅ Valid</span>
-          <span v-else>❌ Must equal 100%</span>
-        </div>
-
-        <!-- Updated Score Display -->
-        <div class="customized-score-display" v-if="totalWeight === 100">
-          <h3 style="color: #00d4ff">
-            Customized Score: {{ customizedScore }}/100
-          </h3>
-        </div>
-
-        <button @click="resetWeights" class="reset-btn">
-          Reset to Default (25% each)
-        </button>
-        <p class="weightage-note">
-          💡 Custom weights only affect this view. Export uses default weights.
-        </p>
-      </div>
-    </div>
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -1218,63 +1137,8 @@ const categoryColorMap: Record<string, string> = {
 
 const router = useRouter();
 const analysisStore = useAnalysisStore();
-const showWeightageModal = ref(false);
 
 const analysisData = computed(() => analysisStore.analysisResult);
-
-const weights = ref({
-  founder: 25,
-  market: 25,
-  differentiation: 25,
-  team: 25,
-});
-
-// Store original scores when analysis loads
-const originalScores = ref({
-  founder: 0,
-  market: 0,
-  differentiation: 0,
-  team: 0,
-});
-
-// Computed total weight
-const totalWeight = computed(() => {
-  return (
-    weights.value.founder +
-    weights.value.market +
-    weights.value.differentiation +
-    weights.value.team
-  );
-});
-
-// Computed customized score
-const customizedScore = computed(() => {
-  if (totalWeight.value !== 100) return 0;
-
-  const score =
-    (originalScores.value.founder * weights.value.founder) / 100 +
-    (originalScores.value.market * weights.value.market) / 100 +
-    (originalScores.value.differentiation * weights.value.differentiation) /
-      100 +
-    (originalScores.value.team * weights.value.team) / 100;
-
-  return Math.round(score * 10) / 10;
-});
-
-// Recalculate on slider change
-function recalculateScore() {
-  console.log("Score recalculated:", customizedScore.value);
-}
-
-// Reset to defaults
-function resetWeights() {
-  weights.value = {
-    founder: 25,
-    market: 25,
-    differentiation: 25,
-    team: 25,
-  };
-}
 
 const publicData = computed(() => {
   const data = (analysisData.value as any)?.public_data;
@@ -1610,25 +1474,6 @@ onMounted(() => {
       router.push("/");
     }, 100);
   }
-
-  const categoryScores = analysisData.value.recommendation.categoryScores;
-  if (categoryScores) {
-    originalScores.value = {
-      founder: categoryScores.founder || 75,
-      market: categoryScores.market || 75,
-      differentiation: categoryScores.differentiation || 75,
-      team: categoryScores.team || 75,
-    };
-  } else {
-    // Fallback if backend doesn't send breakdown
-    originalScores.value = {
-      founder: 75,
-      market: 75,
-      differentiation: 75,
-      team: 75,
-    };
-  }
-  console.log("Scores loaded:", originalScores.value);
 });
 
 function getConfidenceClass() {
@@ -2708,22 +2553,6 @@ function emailQuestions() {
   position: relative;
 }
 
-.modal-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 1.5em;
-  cursor: pointer;
-  transition: color 0.3s ease;
-
-  &:hover {
-    color: #ffffff;
-  }
-}
-
 .modal-header {
   display: flex;
   align-items: center;
@@ -3471,116 +3300,6 @@ function emailQuestions() {
   }
 }
 
-.weightage-customization {
-  background: rgba(0, 212, 255, 0.05);
-  border: 1px solid rgba(0, 212, 255, 0.2);
-  border-radius: 12px;
-  padding: 20px;
-  margin-top: 30px;
-
-  h4 {
-    margin: 0 0 20px 0;
-  }
-}
-
-.weight-slider-group {
-  margin-bottom: 20px;
-}
-
-.weight-label {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.8);
-  font-weight: 500;
-}
-
-.weight-value {
-  color: #00d4ff;
-  font-weight: 600;
-}
-
-.weight-slider {
-  width: 100%;
-  height: 6px;
-  appearance: none;
-  background: rgba(255, 255, 255, 0.1);
-  outline: none;
-  border-radius: 3px;
-  cursor: pointer;
-
-  &::-webkit-slider-thumb {
-    appearance: none;
-    width: 16px;
-    height: 16px;
-    background: #00d4ff;
-    border-radius: 50%;
-    cursor: pointer;
-    box-shadow: 0 0 8px rgba(0, 212, 255, 0.5);
-  }
-
-  &::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    background: #00d4ff;
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-  }
-}
-
-.weight-total {
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  text-align: center;
-  margin: 16px 0;
-  font-weight: 600;
-
-  &.valid {
-    border: 1px solid #22c55e;
-    color: #22c55e;
-  }
-
-  &.invalid {
-    border: 1px solid #ef4444;
-    color: #ef4444;
-  }
-}
-
-.customized-score-display {
-  background: linear-gradient(
-    135deg,
-    rgba(0, 212, 255, 0.1),
-    rgba(34, 197, 94, 0.1)
-  );
-  padding: 16px;
-  border-radius: 8px;
-  margin: 16px 0;
-  text-align: center;
-
-  h3 {
-    margin: 0;
-  }
-}
-
-.reset-btn {
-  width: 100%;
-  padding: 10px;
-  background: rgba(0, 212, 255, 0.1);
-  border: 1px solid rgba(0, 212, 255, 0.3);
-  color: #00d4ff;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.3s ease;
-
-  &:hover {
-    background: rgba(0, 212, 255, 0.2);
-  }
-}
-
 .call-prep-section,
 .benchmarking-section {
   background: rgba(255, 255, 255, 0.02);
@@ -3644,47 +3363,6 @@ function emailQuestions() {
   }
 }
 
-.customize-weights-btn {
-  margin-top: 12px;
-  padding: 10px 20px;
-  background: rgba(0, 212, 255, 0.2);
-  border: 1px solid rgba(0, 212, 255, 0.4);
-  color: #00d4ff;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.3s ease;
-
-  &:hover {
-    background: rgba(0, 212, 255, 0.3);
-  }
-}
-
-.weightage-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.weightage-modal-content {
-  background: #1a2332;
-  border: 1px solid rgba(0, 212, 255, 0.3);
-  border-radius: 12px;
-  padding: 24px;
-  max-width: 600px;
-  width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
-  position: relative;
-}
-
 .questions-content {
   background: rgba(255, 255, 255, 0.05);
   padding: 16px;
@@ -3694,13 +3372,6 @@ function emailQuestions() {
   white-space: pre-wrap;
   word-wrap: break-word;
   font-size: 13px;
-}
-
-.weightage-note {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
-  margin-top: 8px;
-  text-align: center;
 }
 
 // ============================================================================
