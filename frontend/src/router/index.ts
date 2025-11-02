@@ -3,6 +3,7 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from "vue-router";
 import HomeView from "../views/HomeView.vue";
 import { useAnalysisStore } from "@/stores/analysisStore";
+import { useAuthStore } from "@/stores/authStore";
 
 // ✅ NEW: Route guard to protect analysis routes
 // const requiresAnalysisData = (to: any, from: any, next: any) => {
@@ -74,7 +75,16 @@ const routes: Array<RouteRecordRaw> = [
           import(
             /* webpackChunkName: "new-analysis" */ "../views/NewAnalysisView.vue"
           ),
-        meta: { title: "New Analysis - AnalystIQ", requiresAuth: false },
+        meta: { title: "New Analysis - AnalystIQ", requiresAuth: true },
+      },
+      {
+        path: "my-analyses",
+        name: "MyAnalyses",
+        component: () =>
+          import(
+            /* webpackChunkName: "my-analyses" */ "../views/MyAnalysesView.vue"
+          ),
+        meta: { title: "My Analyses - AnalystIQ", requiresAuth: true },
       },
       {
         path: "analysis-in-progress",
@@ -85,7 +95,7 @@ const routes: Array<RouteRecordRaw> = [
           ),
         meta: {
           title: "Analysis in Progress - AnalystIQ",
-          requiresAuth: false,
+          requiresAuth: true,
         },
         beforeEnter: requiresAnalysisData,
       },
@@ -96,7 +106,7 @@ const routes: Array<RouteRecordRaw> = [
           import(
             /* webpackChunkName: "analysis-results" */ "../views/AnalysisResultsView.vue"
           ),
-        meta: { title: "Analysis Results - AnalystIQ", requiresAuth: false },
+        meta: { title: "Analysis Results - AnalystIQ", requiresAuth: true },
         beforeEnter: requiresAnalysisData,
       },
     ],
@@ -117,18 +127,40 @@ const router = createRouter({
 });
 
 // Global navigation guard
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   // Set page title
   if (to.meta.title) {
     document.title = to.meta.title as string;
   }
 
-  // Check authentication if required
-  if (to.meta.requiresAuth) {
-    // Add authentication logic here
-    // For now, allow all routes
-    next();
-  } else {
+  // ✅ ADD: Check auth state
+  const authStore = useAuthStore();
+
+  // Initialize auth if not done
+  if (!authStore.isAuthenticated && !authStore.user) {
+    console.log("🔑 Checking auth state...");
+    try {
+      await authStore.initializeAuth();
+    } catch (error) {
+      console.error("❌ Auth initialization failed:", error);
+    }
+  }
+
+  // ✅ If route requires auth and user not logged in, redirect to login
+  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
+    console.log("🔒 Route requires auth, redirecting to login");
+    next({ name: "Login", query: { redirect: to.fullPath } });
+  }
+  // ✅ If user is logged in and tries to go to login, redirect to analysis
+  else if (
+    (to.name === "Login" || to.path === "/login") &&
+    authStore.isAuthenticated
+  ) {
+    console.log("✅ User already logged in, redirecting to analysis");
+    next({ name: "NewAnalysis" });
+  }
+  // ✅ Allow navigation
+  else {
     next();
   }
 });

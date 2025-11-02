@@ -4,6 +4,7 @@ import axios, {
   AxiosError,
   AxiosProgressEvent,
 } from "axios";
+import { useAuthStore } from "@/stores/authStore";
 
 type ProgressCallback = (message: string, progress: number) => void;
 
@@ -288,6 +289,8 @@ export const analysisService = {
     formData.append("sector", category);
     formData.append("transcriptText", transcriptText);
 
+    formData.append("userId", getUserIdFromAuthStore());
+
     try {
       progressCallback("Uploading documents to Cloud Function...", 5);
       console.log("📤 Sending", files.length, "file(s) + category:", category);
@@ -416,22 +419,6 @@ export const analysisService = {
     }
   },
 
-  //async checkBackendHealth(): Promise<HealthResponse> {
-  //  try {
-  //    // Cloud Function doesn't have a dedicated health endpoint
-  //    // Just return a mock response indicating it's likely working
-  //    console.log("✅ Cloud Function endpoint is configured");
-  //    return {
-  //      status: "healthy",
-  //      service: "Cloud Function - Investment Analysis",
-  //      timestamp: new Date().toISOString(),
-  //    };
-  //  } catch (error: any) {
-  //    console.error("❌ Health check failed:", error.message);
-  //    throw new Error("Cloud Function not reachable");
-  //  }
-  //},
-
   getApiUrl(): string {
     return CLOUD_FUNCTION_URL;
   },
@@ -439,3 +426,16 @@ export const analysisService = {
 
 export default analysisService;
 export type { ProgressCallback, AnalysisResponse, HealthResponse };
+
+function getUserIdFromAuthStore(): string {
+  const authStore = useAuthStore();
+  const userId = authStore.getUserId;
+
+  if (!userId) {
+    console.warn("⚠️ No user ID - analysis won't be saved");
+    return "anonymous";
+  }
+
+  console.log("✅ Sending userId:", userId);
+  return userId;
+}

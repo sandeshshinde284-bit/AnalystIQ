@@ -1,105 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-================================================================================
-Investment Analysis Cloud Function (main.py)
-================================================================================
-
-Purpose:
---------
-This script is a Google Cloud Function that acts as a secure and scalable API 
-endpoint for analyzing investment documents. It is designed to process startup 
-pitch decks, financial models, and other business documents to provide a 
-comprehensive investment analysis, similar to what a venture capital analyst would produce.
-
-Workflow:
----------
-1.  **Receive Request:** The function listens for HTTPS POST requests containing
-    one or more files (`multipart/form-data`). It also handles CORS preflight
-    requests (`OPTIONS`).
-
-2.  **Validate Files:** Each uploaded file is rigorously validated against a set
-    of criteria:
-    -   File presence, size (max 50MB), and type (PDF, DOCX, etc.).
-    -   Content validity (e.g., is it a business document?).
-
-3.  **Extract Text (Document AI):** The core text extraction is handled by Google
-    Cloud Document AI. The script has intelligent logic to handle documents of
-    any size:
-    -   **Online Processing (Fast):** For smaller documents, it uses the fast,
-        synchronous API.
-        - With OCR (`USE_OCR=True`): Up to 15 pages.
-        - Imageless (`USE_OCR=False`): Up to 30 pages.
-    -   **Batch Processing (Robust):** If a document exceeds the online page limit,
-        the script automatically uploads it to Google Cloud Storage (GCS) and
-        initiates an asynchronous batch job, which can handle up to 500 pages.
-
-4.  **Analyze Content (Vertex AI Gemini):** The extracted text is sent to a 
-    powerful large language model (Gemini) via Vertex AI. The model is given a 
-    detailed prompt instructing it to act as a senior VC analyst and return its
-    findings in a structured JSON format.
-
-5.  **Validate AI Response:** The JSON response from Gemini is validated to ensure
-    it contains all the required fields (e.g., `startupName`, `recommendation`, 
-    `riskAssessment`) before being sent to the client.
-
-6.  **Return Structured Response:** The function returns a comprehensive JSON 
-    object containing the full analysis, metadata about the processed files, 
-    and detailed error messages if any step fails.
-
-Key Technologies Used:
-----------------------
--   **Google Cloud Functions:** For serverless, scalable execution.
--   **Google Cloud Document AI:** For high-accuracy text extraction with OCR.
--   **Google Cloud Vertex AI:** To access and run the Gemini generative model.
--   **Google Cloud Storage:** As a temporary holding area for large files during
-    batch processing.
--   **Flask:** As the underlying web framework for handling HTTP requests.
-
-How to Modify:
---------------
--   **Project & Processor IDs:** Change `PROJECT_ID`, `LOCATION`, `PROCESSOR_ID`,
-    and bucket names under the `--- CONFIGURATION ---` section to match your
-    Google Cloud setup.
--   **OCR Setting:** The `USE_OCR` variable is crucial. Set it to `"true"` (default)
-    to analyze scanned documents or PDFs with text in images. Set it to `"false"`
-    for faster processing of purely digital documents.
--   **Analysis Prompt:** The prompt within the `analyze_investment_opportunity`
-    function can be modified to change the structure or focus of the AI's analysis.
-
-================================================================================
-INVESTMENT ANALYSIS CLOUD FUNCTION (main.py)
-================================================================================
-
-OVERVIEW:
----------
-Google Cloud Function that analyzes startup pitch decks and business documents
-using OCR (Document AI) and AI (Gemini) to provide venture capital investment
-insights. Handles files up to 500 pages via intelligent online/batch processing.
-
-PROCESSING FLOW:
-----------------
-1. Receive file(s) via multipart/form-data POST request
-2. Validate files (type, size, extension)
-3. Extract text using Document AI with OCR
-   - Online: Up to 15 pages (fast)
-   - Batch: Up to 500 pages (via GCS)
-4. Validate extracted text (minimum length, business keywords)
-5. Analyze with Gemini for VC-style investment analysis
-6. Validate AI response structure
-7. Return comprehensive JSON analysis
-
-KEY FEATURES:
--------------
-✓ Handles multiple file uploads
-✓ OCR support for image-based PDFs
-✓ Automatic online-to-batch fallback
-✓ GCS cleanup after processing
-✓ Comprehensive error handling
-✓ CORS support for frontend integration
-
-
-================================================================================
-"""
 
 # Import standard and Google Cloud libraries
 import os    # For environment variables
@@ -124,8 +22,19 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
 from io import BytesIO
 import requests
+from orchestrator import orchestrator
+import firebase_admin
+from firebase_admin import credentials, firestore
 
-db = firestore.Client()
+print("✅ Orchestrator imported successfully")
+
+try:
+    firebase_admin.initialize_app()
+    db = firestore.client()
+    print("✅ Firebase initialized")
+except Exception as e:
+    print(f"⚠️ Firebase init warning: {str(e)}")
+    db = None
 
 # --- CONFIGURATION ---
 # Read project and processor info from environment or use default
@@ -843,7 +752,6 @@ def search_startup_comprehensively(startup_name: str, serpapi_key: str) -> dict:
                     
                     print(f"   ✅ Found {len(news_results)} news items")
                     search_count += 1
-                    increment_api_usage('serpapi')
                 
                 elif response.status_code == 401:
                     print(f"   ❌ SerpAPI: Unauthorized (401) - Check API key")
@@ -1511,25 +1419,95 @@ def analyze_document(request: Request):
         print(f"🏭 Sector received: {sector}")
         
         # =====================================================================
-        # ANALYZE WITH GEMINI
+        # EXTRACT FULL TEXT FROM extracted_data
         # =====================================================================
-        print(f"\n🧠 ANALYZING WITH GEMINI")
-        update_firestore_progress(request_id, 3, "Analyzing business model and strategy", 40)
-        analysis = analyze_investment_opportunity(extracted_data, file_names, sector)
-        
-        if "error" in analysis:
-            print(f"❌ Analysis error: {analysis.get('error')}")
+        all_extracted_text = extracted_data.get("full_text", "")
+        if not all_extracted_text or len(all_extracted_text) < 50:
+            print(f"❌ Extracted text is empty or too short")
             error_result = {
                 "status": "error",
-                "error_type": "AnalysisError",
-                "code": "GEMINI_ANALYSIS_FAILED",
-                "message": f"Gemini analysis failed: {analysis.get('error')}",
-                "suggestion": "Try again. If the issue persists, contact support",
+                "error_type": "ExtractionError",
+                "code": "INSUFFICIENT_TEXT",
+                "message": "Could not extract meaningful text from documents",
+                "timestamp": datetime.now().isoformat()
+            }
+            return (json.dumps(error_result), 400, cors_headers)
+
+        print(f"✅ Extracted text ready: {len(all_extracted_text)} characters")
+
+
+        # =====================================================================
+        # NEW: CALL ORCHESTRATOR (All 4 Agents)
+        # =====================================================================
+        print(f"\n🤖 CALLING ORCHESTRATOR (All 4 Agents)")
+        update_firestore_progress(request_id, 3, "Running multi-agent analysis pipeline", 40)
+
+        # ====================================================================
+        # COLLECT OPTIONAL DATA (public_data + benchmarking)
+        # ====================================================================
+        
+        #public_data = None
+        #benchmarking = None
+        
+        # try:
+        #     print(f"\n🌐 Fetching public data...")
+        #     startup_name_temp = extracted_data.get('startupName', 'Unknown') if isinstance(extracted_data, dict) else 'Unknown'
+        #     public_data = synthesize_public_data_with_gemini(startup_name_temp, {})
+        #     print(f"✅ Public data fetched")
+        # except Exception as e:
+        #     print(f"⚠️ Public data failed (non-critical): {str(e)[:100]}")
+        #     public_data = None
+        
+        # try:
+        #     print(f"\n📊 Generating benchmarking...")
+        #     benchmarking = add_benchmark_comparison({}, sector)
+        #     print(f"✅ Benchmarking generated")
+        # except Exception as e:
+        #     print(f"⚠️ Benchmarking failed (non-critical): {str(e)[:100]}")
+        #     benchmarking = None
+        
+        # ====================================================================
+        # CALL ORCHESTRATOR (All 4 Agents)
+        # ====================================================================
+        
+        print(f"\n🤖 Calling orchestrator.analyze_full_pipeline()...")
+        
+        user_id = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not user_id:
+            user_id = request.form.get('userId')  # Fallback
+
+        print(f" User ID: {user_id}")    
+
+        analysis = orchestrator.analyze_full_pipeline(
+            extracted_text=all_extracted_text,
+            file_names=file_names,
+            sector=sector,
+            user_id=user_id
+        )
+        
+
+        print(f"\n[DEBUG] After Orchestrator:")
+        print(f"  Analysis has call_prep_questions: {'call_prep_questions' in analysis}")
+        print(f"  Length: {len(analysis.get('call_prep_questions', ''))}")
+        # ====================================================================
+        # CHECK FOR ORCHESTRATOR ERRORS
+        # ====================================================================
+        
+        if analysis.get("status") != "success":
+            print(f"❌ Orchestrator error: {analysis.get('error')}")
+            error_result = {
+                "status": "error",
+                "error_type": "OrchestratorError",
+                "code": "ORCHESTRATOR_FAILED",
+                "message": f"Multi-agent analysis failed: {analysis.get('error')}",
+                "stage": analysis.get('stage', 'unknown'),
                 "timestamp": datetime.now().isoformat()
             }
             return (json.dumps(error_result), 500, cors_headers)
         
-        print(f"✅ Gemini analysis successful")
+        print(f"✅ Orchestrator analysis successful")
+        print(f"   Company: {analysis.get('startupName', 'Unknown')}")
+        print(f"   Recommendation: {analysis.get('recommendation', {}).get('text', 'Unknown')} ({analysis.get('recommendation', {}).get('score', 'N/A')}/100)")
         
         # =====================================================================
         # CREATE PAGE MAPS
@@ -1542,14 +1520,14 @@ def analyze_document(request: Request):
         # =====================================================================
         # 🌐 PUBLIC DATA
         # =====================================================================
-        try:
-            print(f"\n🌐 Fetching public data...")
-            startup_name = analysis.get("startupName", "Unknown")
-            public_data = synthesize_public_data_with_gemini(startup_name, analysis)
-            print(f"✅ Public data fetched")
-        except Exception as public_error:
-            print(f"⚠️ Public data failed: {str(public_error)}")
-            public_data = None  
+        # try:
+        #     print(f"\n🌐 Fetching public data...")
+        #     startup_name = analysis.get("startupName", "Unknown")
+        #     public_data = synthesize_public_data_with_gemini(startup_name, analysis)
+        #     print(f"✅ Public data fetched")
+        # except Exception as public_error:
+        #     print(f"⚠️ Public data failed: {str(public_error)}")
+        #     public_data = None  
         
         # =====================================================================
         # BUILD FINAL RESPONSE
@@ -1601,89 +1579,83 @@ def analyze_document(request: Request):
                 "processingTime": "real-time",
                 "processingMethod": extracted_data.get("processing_method", "online_imageless")
             },
-            "public_data": None,  # ✅ Initialize as None
-            "memo_pdf_base64": None  # ✅ Initialize as None
+            "public_data": analysis.get("public_data", []),
+            "benchmarking": analysis.get('benchmarking', ''),
+            "memo_pdf_base64": analysis.get('memo_pdf_base64', None)
         }  
 
-        print(f"\n✅ Adding public_data to result")
-        result['public_data'] = public_data
-        
-        # ✅ DEBUG: Show what's in public_data
-        if public_data:
-            print(f"   - GitHub profiles: {len(public_data.get('github_profiles', []))}")
-            print(f"   - News articles: {len(public_data.get('comprehensive_news', []))}")
-            print(f"   - Company info: {len(public_data.get('company_info', {}))}")
-        else:
-            print(f"   - PUBLIC DATA IS NULL")
+        print(f"\n✅ Adding Question generated for founder to result")
+        result['call_prep_questions'] = analysis.get('call_prep_questions', '')
+        result['questions_json'] = analysis.get('questions_json', [])
+        result['topics_to_explore'] = analysis.get('topics_to_explore', [])
+
+        # print(f"\n✅ Adding public_data to result")
+        # result['public_data'] = public_data
         
         update_firestore_progress(request_id, 6, "Generating deal memo", 100)
         
-        # 📄 PDF Generation with proper validation
-        print(f"\n📄 Generating investment memo...")
-        memo_pdf_bytes = None
-        memo_pdf_base64 = None
-        try:
-
-          
-
-            memo_pdf_bytes = generate_investment_memo_pdf(result)
+        # # 📄 PDF Generation with proper validation
+        # print(f"\n📄 Generating investment memo...")
+        # memo_pdf_bytes = None
+        # memo_pdf_base64 = None
+        # try:
+        #     memo_pdf_bytes = generate_investment_memo_pdf(result)
             
-            # ✅ VALIDATE before encoding
-            if memo_pdf_bytes and isinstance(memo_pdf_bytes, bytes) and len(memo_pdf_bytes) > 500:
-                memo_pdf_base64 = base64.b64encode(memo_pdf_bytes).decode('utf-8')
-                result['memo_pdf_base64'] = memo_pdf_base64
-                print(f"✅ PDF generated: {len(memo_pdf_base64)} chars")
-            else:
-                print(f"❌ PDF bytes invalid: {len(memo_pdf_bytes) if memo_pdf_bytes else 0}")
-                result['memo_pdf_base64'] = None
+        #     # ✅ VALIDATE before encoding
+        #     if memo_pdf_bytes and isinstance(memo_pdf_bytes, bytes) and len(memo_pdf_bytes) > 500:
+        #         memo_pdf_base64 = base64.b64encode(memo_pdf_bytes).decode('utf-8')
+        #         result['memo_pdf_base64'] = memo_pdf_base64
+        #         print(f"✅ PDF generated: {len(memo_pdf_base64)} chars")
+        #     else:
+        #         print(f"❌ PDF bytes invalid: {len(memo_pdf_bytes) if memo_pdf_bytes else 0}")
+        #         result['memo_pdf_base64'] = None
                 
-        except Exception as pdf_error:
-            print(f"❌ PDF error: {str(pdf_error)}")
-            import traceback
-            traceback.print_exc()
-            result['memo_pdf_base64'] = None
+        # except Exception as pdf_error:
+        #     print(f"❌ PDF error: {str(pdf_error)}")
+        #     import traceback
+        #     traceback.print_exc()
+        #     result['memo_pdf_base64'] = None
 
-        try:
-            print(f"\n   → Generating call prep questions...")
-            call_prep_questions = generate_call_prep_questions(analysis)
-            if call_prep_questions and len(call_prep_questions) > 50:
-                result['call_prep_questions'] = call_prep_questions
-                print(f"✓ Call prep questions added ({len(call_prep_questions)} chars)")
-            else:
-                print(f"✗ Call prep returned empty or too short: {call_prep_questions[:100]}")
-                result['call_prep_questions'] = None
-        except Exception as e:
-            print(f"✗ Call prep error: {type(e).__name__}: {str(e)}")
-            import traceback
-            traceback.print_exc()  # ✅ PRINT FULL STACK TRACE
-            result['call_prep_questions'] = None
+        # try:
+        #     print(f"\n   → Generating call prep questions...")
+        #     call_prep_questions = generate_call_prep_questions(analysis)
+        #     if call_prep_questions and len(call_prep_questions) > 50:
+        #         result['call_prep_questions'] = call_prep_questions
+        #         print(f"✓ Call prep questions added ({len(call_prep_questions)} chars)")
+        #     else:
+        #         print(f"✗ Call prep returned empty or too short: {call_prep_questions[:100]}")
+        #         result['call_prep_questions'] = None
+        # except Exception as e:
+        #     print(f"✗ Call prep error: {type(e).__name__}: {str(e)}")
+        #     import traceback
+        #     traceback.print_exc()  # ✅ PRINT FULL STACK TRACE
+        #     result['call_prep_questions'] = None
 
-        try:
-            print(f"\n   → Adding benchmark comparison...")
-            benchmarking = add_benchmark_comparison(analysis, sector)
-            if benchmarking and len(benchmarking) > 50:
-                result['benchmarking'] = benchmarking
-                print(f"✓ Benchmarking added ({len(benchmarking)} chars)")
-            else:
-                print(f"✗ Benchmarking returned empty or too short: {benchmarking[:100]}")
-                result['benchmarking'] = None
-        except Exception as e:
-            print(f"✗ Benchmarking error: {type(e).__name__}: {str(e)}")
-            import traceback
-            traceback.print_exc()  # ✅ PRINT FULL STACK TRACE
-            result['benchmarking'] = None
+        # try:
+        #     benchmarking = add_benchmark_comparison(analysis, sector)
+        #     if benchmarking and len(benchmarking) > 50:
+        #         result['benchmarking'] = benchmarking
+        #         print(f"✓ Benchmarking added ({len(benchmarking)} chars)")
+        #     else:
+        #         print(f"✗ Benchmarking returned empty or too short: {benchmarking[:100]}")
+        #         result['benchmarking'] = None
+        # except Exception as e:
+        #     print(f"✗ Benchmarking error: {type(e).__name__}: {str(e)}")
+        #     import traceback
+        #     traceback.print_exc()  # ✅ PRINT FULL STACK TRACE
+        #     result['benchmarking'] = None
 
 
         # 🌐 PUBLIC DATA
-        try:
-            print(f"\n🌐 Fetching public data...")
-            startup_name = analysis.get("startupName", "Unknown")
-            public_data = synthesize_public_data_with_gemini(startup_name, analysis)
-            result['public_data'] = public_data
-            print(f"✅ Public data fetched")
-        except Exception as public_error:
-            print(f"⚠️ Public data failed: {str(public_error)}")
-            result['public_data'] = None  
+        # try:
+        #     print(f"\n🌐 Fetching public data...")
+        #     startup_name = analysis.get("startupName", "Unknown")
+        #     public_data = synthesize_public_data_with_gemini(startup_name, analysis)
+        #     result['public_data'] = public_data
+        #     print(f"✅ Public data fetched")
+        # except Exception as public_error:
+        #     print(f"⚠️ Public data failed: {str(public_error)}")
+        #     result['public_data'] = None  
 
         try:
             db.collection('analysis_progress').document(request_id).update({
@@ -2769,9 +2741,6 @@ def synthesize_public_data_with_gemini(startup_name: str, analysis: dict) -> dic
             'funding_signals': {},
             'api_usage': {
                 'github': {'used': 0, 'limit': 'unlimited', 'can_call': True},
-                'serpapi': check_api_limits('serpapi'),
-                'newsapi': check_api_limits('newsapi'),
-                'hunter': check_api_limits('hunter')
             },
             'source': 'real_apis',
             'data_quality': {
@@ -2849,7 +2818,6 @@ def synthesize_public_data_with_gemini(startup_name: str, analysis: dict) -> dic
                             })
                         
                         print(f"   ✅ NewsAPI: Found {len(articles)} articles")
-                        increment_api_usage('newsapi')
                     
                     elif response.status_code == 401:
                         print(f"   ❌ NewsAPI: Unauthorized (401)")
@@ -2910,7 +2878,6 @@ def synthesize_public_data_with_gemini(startup_name: str, analysis: dict) -> dic
                         })
                         
                         print(f"   ✅ Hunter.io: Got company details")
-                        increment_api_usage('hunter')
                     
                     elif response.status_code == 404:
                         print(f"   ⚠️ Hunter.io: Domain not found ({domain})")
@@ -2972,593 +2939,6 @@ def initialize_api_usage_tracking():
         print(f"\n 📋 API tracking error (non-critical): {str(e)}")
 
 
-def check_api_limits(api_name: str) -> dict:
-    """Check if API has quota remaining"""
-    try:
-        usage_ref = db.collection('api_usage').document('monthly')
-        usage_doc = usage_ref.get()
-        
-        if not usage_doc.exists:
-            initialize_api_usage_tracking()
-            usage_doc = usage_ref.get()
-        
-        usage_data = usage_doc.to_dict()
-        
-        if api_name == 'serpapi':
-            calls_used = usage_data.get('serpapi_calls', 0)
-            limit = usage_data.get('serpapi_limit', 250)
-            remaining = limit - calls_used
-            buffer = 5  # Keep 5 calls as buffer
-            
-            can_call = remaining > buffer
-            print(f"\n 📋  SerpAPI: {calls_used}/{limit} used, {remaining} remaining, CAN_CALL: {can_call}")
-            
-            return {
-                'can_call': can_call,
-                'used': calls_used,
-                'limit': limit,
-                'remaining': remaining
-            }
-        
-        elif api_name == 'newsapi':
-            calls_used = usage_data.get('newsapi_calls', 0)
-            limit = usage_data.get('newsapi_limit', 2000)
-            remaining = limit - calls_used
-            buffer = 10  # Keep 10 for buffer
-            
-            can_call = remaining > buffer
-            print(f"\n 📋  NewsAPI: {calls_used}/{limit} used, {remaining} remaining, CAN_CALL: {can_call}")
-            
-            return {
-                'can_call': can_call,
-                'used': calls_used,
-                'limit': limit,
-                'remaining': remaining
-            }
-        
-        elif api_name == 'hunter':
-            calls_used = usage_data.get('hunter_calls', 0)
-            limit = usage_data.get('hunter_limit', 60)
-            remaining = limit - calls_used
-            buffer = 2  # Keep 2 for buffer
-            
-            can_call = remaining > buffer
-            print(f"\n 📋  Hunter.io: {calls_used}/{limit} used, {remaining} remaining, CAN_CALL: {can_call}")
-            
-            return {
-                'can_call': can_call,
-                'used': calls_used,
-                'limit': limit,
-                'remaining': remaining
-            }
-        
-        return {'can_call': False, 'error': 'Unknown API'}
-        
-    except Exception as e:
-        print(f"\n 📋 API limit check error: {str(e)}")
-        return {'can_call': False, 'error': str(e)}
-
-
-def increment_api_usage(api_name: str):
-    """Increment API call counter after successful call"""
-    try:
-        usage_ref = db.collection('api_usage').document('monthly')
-        
-        if api_name == 'serpapi':
-            usage_ref.update({'serpapi_calls': firestore.Increment(1)})
-        elif api_name == 'newsapi':
-            usage_ref.update({'newsapi_calls': firestore.Increment(1)})
-        elif api_name == 'hunter':
-            usage_ref.update({'hunter_calls': firestore.Increment(1)})
-        
-        print(f"\n 📋 {api_name} usage incremented")
-    except Exception as e:
-        print(f"\n 📋 Failed to update usage: {str(e)}")         
-
-def analyze_investment_opportunity(extracted_data: dict, file_names: list = [], sector: str = None, request_id: str = None) -> dict:
-    """Real investment analysis using Gemini - FIXED JSON parsing"""
-    try:
-        if "error" in extracted_data:
-            return {"error": "Cannot analyze - extraction failed"}
-        
-        print(f"   → Initializing Gemini...")
-        
-        # Try models in priority order
-        models_to_try = [
-            "gemini-2.0-flash",
-            "gemini-2.5-flash", 
-            "gemini-1.5-flash",
-            "gemini-2.5-pro",
-            "gemini-1.5-pro",
-        ]
-        
-        model = None
-        model_used = None
-        
-        for model_name in models_to_try:
-            try:
-                print(f"   → Testing {model_name}...")
-                model = GenerativeModel(model_name)
-                test_response = model.generate_content(
-                    "test",
-                    generation_config={"max_output_tokens": 2}
-                )
-                model_used = model_name
-                print(f"   ✅ Using {model_name}")
-                break
-            except Exception as e:
-                print(f"   ⚠️ {model_name} unavailable: {str(e)}")
-                continue
-        
-        if not model:
-            raise Exception("No Gemini models available in this region")
-        
-        full_text = extracted_data.get('full_text', '')
-        page_count = extracted_data.get('page_count', 0)
-        doc_names = ", ".join(file_names) if file_names else "uploaded document"
-        
-        print(f"   → Analyzing {page_count} pages with {model_used}...")
-        
-         # ✅ SECURITY: Escape Gemini input
-        full_text_escaped = escape_gemini_input(full_text)
-
-        # Build analysis prompt - SIMPLIFIED FOR RELIABILITY
-# REPLACE the analyze_investment_opportunity() function prompt section with this:
-
-#OLD PROMPT
-#         sector_context = f"This is a {get_industry_from_sector(sector)} startup" if sector else "This is a technology startup"
-
-#         # Build analysis prompt - ENHANCED TO EXTRACT ALL DATA
-#         prompt = f"""You are a senior venture capital analyst. {sector_context}. Analyze this startup document and extract ALL available investment data.
-
-# DOCUMENT INFO:
-# - Documents: {doc_names}
-# - Pages: {page_count}
-
-# DOCUMENT CONTENT:
-# {full_text_escaped[:100000]}
-
-# EXTRACTION INSTRUCTIONS:
-# ================================================================================
-# For EVERY field, search the entire document thoroughly. If data exists ANYWHERE in the document, extract it.
-
-# TRACTION DATA EXTRACTION (Critical):
-# - Customers: Look for "X customers", "serving Y clients", logos, customer names
-# - Revenue: Look for "$X revenue", "X MRR", "X ARR", "generated $X", sales figures
-# - Users: Look for "X users", "X active users", "X downloads", growth metrics
-# - Partnerships: Look for "partners with", "integrated with", "backed by", "works with"
-# - Awards: Look for "won award", "recognized by", "featured in", "press mentioned"
-# - Media: Look for news articles, blog posts, press releases, mentions
-
-# Return ONLY this JSON structure. Fill in EVERY field with data from the document. If data is not available, use "Not specified in document" or empty array [].
-
-# {{
-#   "startupName": "Company name from document",
-#   "industry": "Industry type",
-#   "stage": "Funding stage (Seed/Series A/etc)",
-#   "recommendation": {{
-#     "text": "INVEST or PASS or REVIEW",
-#     "score": 0-100,
-#     "justification": "Why this score based on document"
-#   }},
-  
-#   "keyMetrics": [
-#     {{
-#       "label": "Metric name",
-#       "value": "Value with units",
-#       "source": {{
-#         "type": "document",
-#         "location": "Page X or Section Y",
-#         "confidence": "high/medium/low",
-#         "details": "How this was extracted"
-#       }}
-#     }}
-#   ],
-  
-#   "riskAssessment": [
-#     {{
-#       "type": "market-risk/execution-risk/financial-risk/technical-risk",
-#       "level": "high/medium/low",
-#       "title": "Risk title",
-#       "description": "Risk description from document",
-#       "mitigation": "How to mitigate",
-#       "impact": "Potential impact if risk occurs"
-#     }}
-#   ],
-  
-#   "summaryContent": {{
-#     "businessOverview": "Full description of what company does, their problem statement, and solution",
-#     "teamExperience": "Detailed team background, founders' experience, past companies, expertise areas",
-#     "productTech": "Product features, technology stack, differentiation, how it works"
-#   }},
-  
-#   "competitiveAnalysis": [
-#     {{
-#       "competitor": "Competitor company name",
-#       "differentiators": "How target company differs from this competitor",
-#       "marketShare": "Market position/share if mentioned",
-#       "strengths": "Competitor strengths mentioned in document",
-#       "weaknesses": "How target company is better"
-#     }}
-#   ],
-  
-#   "marketOpportunity": {{
-#     "TAM": "Total Addressable Market (exact number if in document, e.g. $300B)",
-#     "SAM": "Serviceable Addressable Market",
-#     "SOM": "Serviceable Obtainable Market or initial target",
-#     "growthRate": "Market growth rate with CAGR if mentioned",
-#     "marketTrends": "Industry trends mentioned in document",
-#     "entryBarriers": "Barriers to entry mentioned"
-#   }},
-  
-#   "financialProjections": [
-#     {{
-#       "year": "Year (2025, 2026, etc)",
-#       "revenue": "Projected revenue (e.g., $400k, $2M)",
-#       "expenses": "Projected expenses if mentioned",
-#       "margins": "Gross/Net margins if mentioned",
-#       "metrics": "Other financial metrics (customers, ARR, MRR, etc)",
-#       "source": "Where in document this appears"
-#     }}
-#   ],
-  
-#   "valuationInsights": {{
-#     "currentValuation": "Current valuation if mentioned",
-#     "post_moneyValuation": "Post-money valuation",
-#     "pricingPerShare": "Price per share if in SAFE/equity round",
-#     "comparableCompanies": "Comparable companies for valuation benchmarking",
-#     "keyMetricsForValuation": "Metrics used to justify valuation (revenue multiples, user growth, etc)"
-#   }},
-  
-#   "investmentTerms": {{
-#     "roundType": "Seed/Series A/Series B/SAFE/Convertible Note/etc",
-#     "requestedAmount": "Funding amount requested (e.g., $5M)",
-#     "equity": "Equity percentage offered if specified",
-#     "minimumInvestment": "Minimum check size if specified",
-#     "useOfFunds": "How funds will be used (product dev %, marketing %, hiring %)",
-#     "fundingTimeline": "When they need funds by"
-#   }},
-  
-#   "traction": {{
-#     "customers": "EXTRACT: How many customers? Names if mentioned? Or 'Not mentioned in document'",
-#     "revenue": "EXTRACT: Current revenue/MRR/ARR or sales figures? Or 'Not mentioned in document'",
-#     "users": "EXTRACT: User count, signups, growth rate? Or 'Not mentioned in document'",
-#     "partnerships": "EXTRACT: Partner companies, integrations mentioned? Or 'Not mentioned in document'",
-#     "awards": "EXTRACT: Awards, recognitions, industry certifications? Or 'Not mentioned in document'",
-#     "media": "EXTRACT: Press features, news mentions, blog posts? Or 'Not mentioned in document'"
-#   }},
-  
-#   "crossDocumentInsights": [
-#     {{
-#       "type": "consistency/contradiction/opportunity/concern",
-#       "title": "Insight title",
-#       "description": "If multiple docs analyzed, what connects them",
-#       "confidence": "high/medium/low",
-#       "status": "verified/needs_clarification"
-#     }}
-#   ]
-# }}
-
-# CRITICAL RULES:
-# 1. Extract EXACT data from document - no assumptions
-# 2. If data not in document, use "Not specified in document" or leave empty []
-# 3. For financials, include units ($, %, numbers)
-# 4. Include page numbers or section names for source verification
-# 5. For charts: Include revenue projections, growth rates, burn rate if available
-# 6. Return ONLY valid JSON, no markdown, no explanations
-# 7. All monetary values keep currency symbols
-# 8. All percentage values include % symbol
-# 9. For TRACTION specifically: Search entire document for customer/revenue/user/partnership/award mentions
-# 10. confidence should be "high" only if explicitly stated in document"""
-
-        sector_context = f"This is a {get_industry_from_sector(sector)} startup" if sector else "This is a technology startup"
-
-        prompt = f"""You are a senior venture capital analyst with 15+ years of experience. {sector_context}. 
-
-Your task: Extract EVERY piece of investment data from this startup pitch deck. This analysis will determine whether we invest millions of dollars, so accuracy and completeness are critical.
-
-DOCUMENT INFO:
-- Documents: {doc_names}
-- Pages: {page_count}
-
-DOCUMENT CONTENT:
-{full_text_escaped[:100000]}
-
-================================================================================
-CRITICAL EXTRACTION PRIORITIES (Extract in this order):
-================================================================================
-1. **TRACTION** (customers, revenue, users, growth) - HIGHEST PRIORITY
-2. **FINANCIALS** (projections, burn rate, runway, unit economics)
-3. **MARKET OPPORTUNITY** (TAM, SAM, SOM, growth rate)
-4. **TEAM** (founders, experience, past exits, credentials)
-5. **COMPETITIVE ANALYSIS** (competitors, differentiation)
-6. **RISKS** (market, execution, technical, financial)
-
-================================================================================
-DATA VALIDATION RULES:
-================================================================================
-1. **Numbers MUST include units**: "$5M" not "5", "15%" not "15", "2,000 users" not "2000"
-2. **Dates must be specific**: "Q4 2024" not "recently", "June 2025" not "soon"
-3. **Sources must be precise**: "Page 12" or "Slide 7" or "Revenue Chart"
-4. **Confidence levels**:
-   - HIGH: Explicitly stated with numbers/dates/sources
-   - MEDIUM: Implied or estimated from charts/context
-   - LOW: Vague or unclear references
-
-================================================================================
-VISUAL CONTENT EXTRACTION (Charts, Graphs, Tables):
-================================================================================
-Critical data is often in visuals, not text. When you see:
-
-**Revenue/Growth Charts:**
-- Extract Y-axis values (e.g., "Revenue chart peaks at ~$200k")
-- Note trend direction and rate
-- Extract any labeled data points
-
-**Customer/User Charts:**
-- Count logo grids (e.g., "12 customer logos displayed")
-- Extract growth curves (e.g., "Users: 1k→5k→15k in 6 months")
-
-**Financial Tables:**
-- Extract ALL numeric rows/columns
-- Distinguish projections vs actuals
-
-**Slide Titles/Headers:**
-- Often contain hidden metrics (e.g., "Slide: '15k Users & Growing'")
-
-✅ EXAMPLE: 
-- Slide text: "Strong traction"
-- Chart shows: Users 1k → 15k over 6 months
-- EXTRACT: "users": "15,000 active users, 15x growth from Jan-June 2024"
-
-================================================================================
-TRACTION EXTRACTION RULES (HIGHEST PRIORITY):
-================================================================================
-Traction is the #1 signal for investment decisions. Search EVERY page, chart, graph, caption, and footnote.
-
-**Where to look:**
-1. Dedicated "Traction" or "Growth" or "Metrics" slides
-2. Charts showing revenue/user growth curves
-3. Customer logo grids or testimonials
-4. Press/media logos or mentions
-5. Footnotes with metrics
-6. About Us / Team slides (sometimes have hidden metrics)
-
-**Acceptable extraction formats:**
-✅ "250+ customers" or "customers: 250" or "250 paying clients"
-✅ "$120k MRR" or "monthly revenue of $120,000" or "MRR: $120k"
-✅ "15k users" or "15,000 active users" or "MAU: 15,000"
-✅ "Featured in TechCrunch (May 2024)" or "TechCrunch logo shown"
-✅ Customer logos: count them and name them
-
-**Extraction examples:**
-✅ GOOD: "customers": "250 paying customers including Google (logo shown), Microsoft (testimonial), Amazon"
-✅ GOOD: "revenue": "$120k MRR with 15% month-over-month growth, chart shows trajectory from $50k (Jan) to $120k (June)"
-✅ GOOD: "users": "15,000 monthly active users, grew from 2,000 (Q1) to 15,000 (Q2) representing 650% growth"
-✅ GOOD: "media": "Featured in TechCrunch (May 2024), Forbes (June 2024), appeared on ProductHunt with 400+ upvotes"
-❌ BAD: "customers": "Not mentioned in document" (when customer logos exist)
-❌ BAD: "revenue": "Not specified" (when revenue chart shows growth trend)
-
-================================================================================
-JSON OUTPUT STRUCTURE:
-================================================================================
-Return ONLY this JSON. Fill EVERY field with extracted data. If truly not found after thorough search, use "Not mentioned in document".
-
-{{
-  "startupName": "Exact company name from document",
-  "industry": "Industry/vertical (e.g., FinTech, HealthTech, SaaS)",
-  "stage": "Funding stage: Pre-seed/Seed/Series A/Series B",
-  
-  "recommendation": {{
-    "text": "INVEST or PASS or REVIEW",
-    "score": 0-100 (0-40: Pass, 41-70: Review, 71-100: Invest),
-    "justification": "2-3 sentence explanation of score based on traction, market, team, financials"
-  }},
-  
-  "keyMetrics": [
-    {{
-      "label": "Metric name (e.g., 'Monthly Recurring Revenue', 'Customer Count')",
-      "value": "Value with units (e.g., '$120k MRR', '250 customers')",
-      "source": {{
-        "type": "document",
-        "location": "Page X, Slide Y, or Chart Title",
-        "confidence": "high/medium/low",
-        "details": "How extracted (e.g., 'from revenue chart on page 8', 'mentioned in traction section')"
-      }}
-    }}
-  ],
-  
-  "traction": {{
-    "customers": "Extract count, names, logos. Include context (e.g., '250 paying customers including 5 Fortune 500 companies'). If TRULY not found: 'Not mentioned in document'",
-    "revenue": "Extract MRR/ARR/total revenue. Include growth (e.g., '$120k MRR, up from $50k 6 months ago'). If charts only, describe (e.g., 'chart shows exponential growth'). If TRULY not found: 'Not mentioned in document'",
-    "users": "Extract count, growth, engagement. Include timeframe (e.g., '15k MAU, doubled in last quarter'). If TRULY not found: 'Not mentioned in document'",
-    "growth_rate": "Extract % MoM, YoY, or growth milestones (e.g., '15% MoM', 'doubled in 6 months'). Check charts. If TRULY not found: 'Not mentioned in document'",
-    "partnerships": "Extract partner names, integrations, strategic backers. Count logos. If TRULY not found: 'Not mentioned in document'",
-    "awards": "Extract awards, recognitions, certifications, competition wins. If TRULY not found: 'Not mentioned in document'",
-    "media": "Extract press mentions with dates, publications, podcast appearances. Count media logos. If TRULY not found: 'Not mentioned in document'"
-  }},
-  
-  "summaryContent": {{
-    "businessOverview": "3-5 sentences: What problem? What solution? For whom? What's unique?",
-    "teamExperience": "3-5 sentences: Founders' backgrounds, relevant experience, past companies, domain expertise, why qualified to solve this problem",
-    "productTech": "3-5 sentences: How product works, key features, technology stack, IP/defensibility, development stage"
-  }},
-  
-  "riskAssessment": [
-    {{
-      "type": "market-risk/execution-risk/financial-risk/technical-risk",
-      "level": "high/medium/low",
-      "title": "Concise risk title (e.g., 'Market Adoption Risk', 'Execution Risk')",
-      "description": "2-3 sentences describing the risk",
-      "mitigation": "How team plans to mitigate this risk",
-      "impact": "What happens if risk materializes"
-    }}
-  ],
-  
-  "competitiveAnalysis": [
-    {{
-      "competitor": "Competitor name",
-      "differentiators": "How target company differs (features, approach, market)",
-      "marketShare": "If mentioned, competitor's position/share",
-      "strengths": "Competitor's advantages",
-      "weaknesses": "Where target company is better"
-    }}
-  ],
-  
-  "marketOpportunity": {{
-    "TAM": "Total Addressable Market with units (e.g., '$300B global market')",
-    "SAM": "Serviceable Addressable Market",
-    "SOM": "Serviceable Obtainable Market or initial target",
-    "growthRate": "Market CAGR or growth rate (e.g., '15% CAGR through 2030')",
-    "marketTrends": "Key industry trends supporting growth",
-    "entryBarriers": "Barriers for new competitors"
-  }},
-  
-  "financialProjections": [
-    {{
-      "year": "Year (2025, 2026, etc)",
-      "revenue": "Projected revenue (e.g., '$2M', '$5M')",
-      "expenses": "Projected expenses if mentioned",
-      "margins": "Gross/net margins if mentioned",
-      "metrics": "Other metrics (e.g., 'customers: 500', 'ARR: $1M')",
-      "source": "Where found (e.g., 'Page 15, Financial Projections table')"
-    }}
-  ],
-  
-  "valuationInsights": {{
-    "currentValuation": "Current/pre-money valuation",
-    "post_moneyValuation": "Post-money valuation after round",
-    "pricingPerShare": "Share price if mentioned",
-    "comparableCompanies": "Comparable companies for valuation",
-    "keyMetricsForValuation": "Valuation justification metrics"
-  }},
-  
-  "investmentTerms": {{
-    "roundType": "Seed/Series A/SAFE/Convertible Note",
-    "requestedAmount": "Amount raising (e.g., '$2M', '$5M')",
-    "equity": "Equity % if specified",
-    "minimumInvestment": "Minimum check size",
-    "useOfFunds": "Breakdown (e.g., '40% product, 30% marketing, 30% hiring')",
-    "fundingTimeline": "When funds needed"
-  }},
-  
-  "crossDocumentInsights": [
-    {{
-      "type": "consistency/contradiction/opportunity/concern",
-      "title": "Insight title",
-      "description": "If multiple docs, note consistencies or gaps",
-      "confidence": "high/medium/low",
-      "status": "verified/needs_clarification"
-    }}
-  ]
-}}
-
-================================================================================
-FINAL REMINDERS:
-================================================================================
-1. **TRACTION IS #1 PRIORITY** - Check EVERY page, chart, graph, caption for metrics
-2. Include units with all numbers (%, $, count)
-3. Extract from charts/graphs/visuals, not just text
-4. Be specific with sources (Page X, Slide Y, Chart Z)
-5. Only use "Not mentioned in document" after exhaustive search
-6. Return ONLY valid JSON, no markdown, no explanation
-7. If you see a number/metric/logo related to traction, EXTRACT IT immediately
-
-Begin analysis now.
-""" 
-
-        print(f"   → Sending to Gemini...")
-        response = model.generate_content(
-            prompt,
-            generation_config={
-                "temperature": 0.1,
-                "max_output_tokens": 8192,  # Increased for more data
-            }
-        )
-        
-        # ✅ FIXED: Better response validation
-        if not response:
-            raise ValueError("Gemini returned empty response")
-        
-        response_text = response.text.strip() if hasattr(response, 'text') else str(response)
-        
-        if not response_text:
-            raise ValueError("Gemini returned empty text")
-        
-        print(f"   → Response received ({len(response_text)} characters)")
-        
-        # ✅ FIXED: Better JSON extraction
-        print(f"   → Parsing JSON response...")
-        
-        # Try to extract JSON from markdown code blocks first
-        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', response_text)
-        if json_match:
-            json_str = json_match.group(1).strip()
-            print(f"   → Extracted JSON from markdown block")
-        else:
-            # Try to find JSON object directly
-            json_match = re.search(r'\{[\s\S]*\}', response_text)
-            if json_match:
-                json_str = json_match.group(0)
-                print(f"   → Extracted JSON from response")
-            else:
-                json_str = response_text
-        
-        # ✅ FIXED: Check if we actually have JSON before parsing
-        if not json_str or json_str.isspace():
-            print(f"   ❌ No JSON found in response:")
-            print(f"   Response text: {response_text[:500]}")
-            raise ValueError(f"Could not extract JSON from response. Got: {response_text[:200]}")
-        
-        # Try to parse JSON
-        try:
-            analysis = json.loads(json_str)
-        except json.JSONDecodeError as e:
-            print(f"   ❌ JSON parse error: {str(e)}")
-            print(f"   Attempted to parse: {json_str[:300]}")
-            raise ValueError(f"Failed to parse Gemini JSON: {str(e)}")
-        
-        # ✅ FIXED: Validate required fields exist
-        required_fields = ['startupName', 'recommendation', 'summaryContent']
-        missing_fields = [f for f in required_fields if f not in analysis]
-        if missing_fields:
-            print(f"   ⚠️ Missing fields: {missing_fields}")
-            # Provide defaults instead of failing
-            if 'startupName' not in analysis:
-                analysis['startupName'] = 'Unknown Company'
-            if 'recommendation' not in analysis:
-                analysis['recommendation'] = {'text': 'REVIEW', 'score': 50, 'justification': 'Incomplete analysis'}
-            if 'summaryContent' not in analysis:
-                analysis['summaryContent'] = {
-                    'businessOverview': 'Not available',
-                    'teamExperience': 'Not available',
-                    'productTech': 'Not available'
-                }
-        
-        # Add metadata
-        analysis["ai_model_used"] = model_used
-        analysis["sector"] = sector
-        analysis["industry"] = get_industry_from_sector(sector)
-        
-        print(f"   ✅ Analysis parsed successfully")
-        print(f"   → Startup: {analysis.get('startupName', 'Unknown')}")
-        print(f"   → Recommendation: {analysis.get('recommendation', {}).get('text', 'Unknown')} ({analysis.get('recommendation', {}).get('score', 0)}/100)")
-        if request_id:
-            update_firestore_progress(request_id, 5, "Benchmarking against market data", 85)
-
-
-        return analysis
-    
-    except ValueError as e:
-        print(f"   ❌ Value error in analysis: {str(e)}")
-        raise e
-    
-    except Exception as e:
-        print(f"   ❌ Gemini analysis failed: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise e
-
 # =============================================================================
 # UTILITY FUNCTIONS
 # =============================================================================
@@ -3618,39 +2998,4 @@ def get_industry_from_sector(sector: str) -> str:
     }
     return sector_map.get(sector, sector.title())
 
-    # =============================================================================
-    # HEALTH CHECK ENDPOINT
-    # =============================================================================
-@functions_framework.http
-def health_check(request: Request):
-    """Health check endpoint for Cloud Function"""
-    
-    # Handle CORS preflight
-    if request.method == 'OPTIONS':
-        headers = get_cors_headers(include_content_type=False)
-        return ('', 204, headers)
-    
-    # Only accept GET requests
-    if request.method != 'GET':
-        headers = get_cors_headers()
-        return (
-            json.dumps({"error": "Method not allowed. Use GET."}),
-            405,
-            headers
-        )
-    
-    cors_headers = get_cors_headers()
-
-    health_result = {
-        "status": "healthy",
-        "service": "AnalystIQ Investment Analysis",
-        "processor_id": PROCESSOR_ID,
-        "project": PROJECT_ID,
-        "location": LOCATION,
-        "version": "1.0-production",
-        "timestamp": datetime.now().isoformat()
-        
-    }
-    
-    print("✅ Health check passed")
-    return (json.dumps(health_result), 200, cors_headers)
+ 
