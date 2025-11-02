@@ -27,10 +27,7 @@
             </div>
           </div>
         </div>
-        <button class="export-btn primary" @click="handlePrintReport">
-          <i class="ri-download-line"></i>
-          Print & Download as PDF
-        </button>
+
         <button
           class="export-btn primary"
           @click="handleExportMemo"
@@ -95,7 +92,57 @@
           {{ analysisData.recommendation.justification }}
         </p>
       </div>
-
+      <!-- ⚠️ TOKEN LIMIT WARNING -->
+      <div
+        v-if="analysisData?.processingWarnings?.token_limit_exceeded"
+        class="token-warning-box"
+      >
+        <div class="warning-header">
+          <i class="ri-alert-line"></i>
+          <h4>⚠️ Token Limit Reached</h4>
+        </div>
+        <div class="warning-content">
+          <p class="warning-message">
+            Some files were skipped due to token limits to ensure analysis
+            quality.
+          </p>
+          <div class="files-info">
+            <div class="files-group">
+              <strong
+                >📄 Files Analyzed ({{
+                  analysisData.processingWarnings.files_analyzed.length
+                }}):</strong
+              >
+              <ul>
+                <li
+                  v-for="file in analysisData.processingWarnings.files_analyzed"
+                  :key="file"
+                >
+                  {{ file }}
+                </li>
+              </ul>
+            </div>
+            <div
+              v-if="analysisData.processingWarnings.skipped_files.length > 0"
+              class="files-group skipped"
+            >
+              <strong
+                >⏭️ Files Skipped ({{
+                  analysisData.processingWarnings.skipped_files.length
+                }}):</strong
+              >
+              <ul>
+                <li
+                  v-for="file in analysisData.processingWarnings.skipped_files"
+                  :key="file"
+                >
+                  {{ file }}
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
       <!-- Tabs Navigation -->
       <div class="tabs-navigation">
         <button
@@ -1535,62 +1582,62 @@ function openSourceModal(metric: any) {
   showSourceModal.value = true;
 }
 
-async function handlePrintReport() {
-  try {
-    // Get all tab panes
-    const tabPanes = document.querySelectorAll("[data-tab-pane]");
+// async function handlePrintReport() {
+//   try {
+//     // Get all tab panes
+//     const tabPanes = document.querySelectorAll("[data-tab-pane]");
 
-    // Store original display states
-    const originalStates = Array.from(tabPanes).map((pane) => ({
-      element: pane as HTMLElement,
-      originalDisplay: (pane as HTMLElement).style.display,
-      originalVisibility: (pane as HTMLElement).style.visibility,
-    }));
+//     // Store original display states
+//     const originalStates = Array.from(tabPanes).map((pane) => ({
+//       element: pane as HTMLElement,
+//       originalDisplay: (pane as HTMLElement).style.display,
+//       originalVisibility: (pane as HTMLElement).style.visibility,
+//     }));
 
-    // Show all tabs temporarily
-    tabPanes.forEach((pane) => {
-      const el = pane as HTMLElement;
-      el.style.display = "block";
-      el.style.visibility = "visible";
-    });
+//     // Show all tabs temporarily
+//     tabPanes.forEach((pane) => {
+//       const el = pane as HTMLElement;
+//       el.style.display = "block";
+//       el.style.visibility = "visible";
+//     });
 
-    // Add print styles temporarily
-    const style = document.createElement("style");
-    style.textContent = `
-      @media print {
-        .tabs-navigation { display: none; }
-        .export-btn { display: none; }
-        .action-buttons { display: none; }
-        [data-tab-pane] {
-          page-break-inside: avoid;
-          page-break-after: always;
-          display: block !important;
-          visibility: visible !important;
-        }
-      }
-    `;
-    document.head.appendChild(style);
+//     // Add print styles temporarily
+//     const style = document.createElement("style");
+//     style.textContent = `
+//       @media print {
+//         .tabs-navigation { display: none; }
+//         .export-btn { display: none; }
+//         .action-buttons { display: none; }
+//         [data-tab-pane] {
+//           page-break-inside: avoid;
+//           page-break-after: always;
+//           display: block !important;
+//           visibility: visible !important;
+//         }
+//       }
+//     `;
+//     document.head.appendChild(style);
 
-    // Wait a moment for DOM to update
-    await new Promise((resolve) => setTimeout(resolve, 100));
+//     // Wait a moment for DOM to update
+//     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // Open print dialog
-    window.print();
+//     // Open print dialog
+//     window.print();
 
-    // Restore original states
-    setTimeout(() => {
-      originalStates.forEach(
-        ({ element, originalDisplay, originalVisibility }) => {
-          element.style.display = originalDisplay;
-          element.style.visibility = originalVisibility;
-        }
-      );
-      document.head.removeChild(style);
-    }, 500);
-  } catch (error) {
-    console.error("Print failed:", error);
-  }
-}
+//     // Restore original states
+//     setTimeout(() => {
+//       originalStates.forEach(
+//         ({ element, originalDisplay, originalVisibility }) => {
+//           element.style.display = originalDisplay;
+//           element.style.visibility = originalVisibility;
+//         }
+//       );
+//       document.head.removeChild(style);
+//     }, 500);
+//   } catch (error) {
+//     console.error("Print failed:", error);
+//   }
+// }
 
 async function handleExportMemo() {
   try {
@@ -4206,6 +4253,112 @@ function emailQuestions() {
     p {
       font-size: 13px;
     }
+  }
+}
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 1.5em;
+  cursor: pointer;
+  transition: color 0.3s ease;
+
+  &:hover {
+    color: #ffffff;
+  }
+}
+
+/* Token Limit Warning */
+.token-warning-box {
+  background: linear-gradient(135deg, #fff8e1 0%, #fffbf0 100%);
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.1);
+}
+
+.warning-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.warning-header i {
+  font-size: 20px;
+  color: #f59e0b;
+}
+
+.warning-header h4 {
+  margin: 0;
+  color: #d97706;
+  font-size: 16px;
+}
+
+.warning-content {
+  margin: 0;
+}
+
+.warning-message {
+  margin: 0 0 12px 0;
+  color: #92400e;
+  font-size: 14px;
+}
+
+.files-info {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.files-group {
+  background: white;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #fcd34d;
+}
+
+.files-group strong {
+  color: #d97706;
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.files-group ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.files-group li {
+  color: #78350f;
+  font-size: 13px;
+  padding: 4px 0;
+  padding-left: 20px;
+  position: relative;
+}
+
+.files-group li:before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #22c55e;
+  font-weight: bold;
+}
+
+.files-group.skipped li:before {
+  content: "⊗";
+  color: #ef4444;
+}
+
+@media (max-width: 768px) {
+  .files-info {
+    grid-template-columns: 1fr;
   }
 }
 </style>

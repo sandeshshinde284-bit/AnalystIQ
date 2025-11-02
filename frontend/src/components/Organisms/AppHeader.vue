@@ -18,7 +18,7 @@
           <i class="ri-add-circle-line"></i>
           New Analysis
         </router-link>
-        <router-link to="/app/my-analyses" class="nav-link">
+        <router-link to="/app/my-analyses" class="new-analysis-btn">
           <i class="ri-history-line"></i>
           My Analyses
         </router-link>
