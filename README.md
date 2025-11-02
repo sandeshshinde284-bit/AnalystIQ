@@ -3,7 +3,7 @@
 **🏆 Google Cloud Gen AI Exchange Hackathon 2025**
 
 ## 🚀 Live Demo
-- **Frontend:** https://analyst-iq-5b9e1.web.app
+- **Frontend:** [[https://analyst-iq-5b9e1.web.app](https://analyst-iq.web.app/app/new-analysis)](https://analyst-iq.web.app/)
 - **Backend API:** https://analyst-iq-backend-631446553603.us-central1.run.app/api/status
 
 ## 📝 Project Overview
