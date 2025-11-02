@@ -445,6 +445,13 @@ export const useAnalysisStore = defineStore("analysis", {
         weights_applied: (data as any).weights_applied || null,
         weighted_recommendation: (data as any).weighted_recommendation || null,
       };
+
+      sanitized.processingWarnings = data.processingWarnings || {
+        token_limit_exceeded: false,
+        skipped_files: [],
+        files_analyzed: [],
+      };
+
       console.log(
         "VALIDATION SUMMARY STRUCTURE:",
         JSON.stringify(this.validationSummary, null, 2)
