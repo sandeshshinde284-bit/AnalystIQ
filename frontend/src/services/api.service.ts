@@ -273,7 +273,8 @@ export const analysisService = {
     files: File[],
     category: string = "technology",
     progressCallback: ProgressCallback,
-    transcriptText: string = ""
+    transcriptText: string = "",
+    weights?: any
   ): Promise<AnalysisResponse> {
     const formData = new FormData();
 
@@ -290,6 +291,17 @@ export const analysisService = {
     formData.append("transcriptText", transcriptText);
 
     formData.append("userId", getUserIdFromAuthStore());
+    formData.append(
+      "weights",
+      JSON.stringify(
+        weights || {
+          founder: 25,
+          market: 25,
+          differentiation: 25,
+          team: 25,
+        }
+      )
+    );
 
     try {
       progressCallback("Uploading documents to Cloud Function...", 5);

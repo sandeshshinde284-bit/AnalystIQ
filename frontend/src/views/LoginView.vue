@@ -16,7 +16,7 @@
             <p>Sign in to your AnalystIQ account</p>
           </div>
 
-          <form @submit.prevent="handleLogin" class="login-form">
+          <form @submit.prevent="handleGoogleLogin" class="login-form">
             <!-- Email Input -->
             <div class="form-group">
               <label for="email" class="form-label">
@@ -127,7 +127,7 @@
               type="button"
               class="social-btn google-btn"
               title="Sign in with Google"
-              @click="handleLogin"
+              @click="handleGoogleLogin"
             >
               <i class="ri-google-fill"></i>
             </button>
@@ -229,19 +229,42 @@ function isValidEmail(email: string): boolean {
   return emailRegex.test(email);
 }
 
-async function handleLogin(): Promise<void> {
+// async function handleLogin(): Promise<void> {
+//   loginError.value = "";
+
+//   if (!validateForm()) {
+//     return;
+//   }
+
+//   isLoading.value = true;
+
+//   try {
+//     // ✅ Use AuthStore's Google login
+//     console.log("🔑 Attempting Google login...");
+//     await authStore.loginWithGoogle();
+
+//     // ✅ Success - redirect to analysis or referrer
+//     const redirectPath =
+//       (route.query.redirect as string) || "/app/new-analysis";
+//     console.log("✅ Login successful, redirecting to:", redirectPath);
+//     router.push(redirectPath);
+//   } catch (error: any) {
+//     console.error("❌ Login failed:", error);
+//     loginError.value = error.message || "Login failed. Please try again.";
+//     isLoading.value = false;
+//   }
+// }
+
+async function handleGoogleLogin(): Promise<void> {
   loginError.value = "";
 
-  if (!validateForm()) {
-    return;
-  }
+  // ⚠️ NOTE: We skip validateForm() because social login doesn't need email/password fields.
 
   isLoading.value = true;
 
   try {
-    // ✅ Use AuthStore's Google login
     console.log("🔑 Attempting Google login...");
-    await authStore.loginWithGoogle();
+    await authStore.loginWithGoogle(); // Directly call Google login
 
     // ✅ Success - redirect to analysis or referrer
     const redirectPath =
